@@ -9,7 +9,7 @@ use std::fs::File;
 use std::env;
 
 mod expression;
-mod intrinsic;
+mod builtin;
 mod environment;
 mod parser;
 
@@ -71,7 +71,7 @@ mod tests {
     }
 
     #[test]
-    fn intrinsic() {
+    fn builtin() {
         let prog = "(- (/ (+ (* 7 8) 4) 2) 3)";
         assert_eq!(*parse_and_eval(prog.as_bytes()), Expr::Number(27));
 

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use std::fmt;
 use environment::Environment;
-use intrinsic::IntrinsicProc;
+use builtin::BuiltinProc;
 
 /// Lisp expressions
 #[derive(PartialEq,Debug)]
@@ -12,7 +12,7 @@ pub enum Expr {
     If(Rc<Expr>, Rc<Expr>, Rc<Expr>),
     Cond(Vec<(Rc<Expr>, Rc<Expr>)>, Option<Rc<Expr>>),
     Number(i32),
-    Intrinsic(IntrinsicProc),
+    Builtin(BuiltinProc),
     Lambda(Vec<String>, Rc<Expr>, Option<Rc<Environment>>),
     Define(String, Rc<Expr>),
     Let(Vec<(String, Rc<Expr>)>, Rc<Expr>),
@@ -53,10 +53,10 @@ impl Expr {
     }
 
     /// Creates a new intrinsic procedure, wrapped in a lambda.
-    pub fn new_intrinsic(procedure: IntrinsicProc) -> Rc<Expr> {
+    pub fn new_builtin(procedure: BuiltinProc) -> Rc<Expr> {
         let params: Vec<_> = (0..procedure.param_no()).map(|i| format!("x{}", i)).collect();
         Expr::new_lambda(params.clone(),
-                         Expr::new_pair(Rc::new(Expr::Intrinsic(procedure)),
+                         Expr::new_pair(Rc::new(Expr::Builtin(procedure)),
                                         Expr::new_list(params.iter()
                                                              .map(|name| {
                                                                  Rc::new(Expr::Symbol(name.clone()))
@@ -136,7 +136,7 @@ impl fmt::Display for Expr {
                 write!(f, ") {})", body)
 
             }
-            Expr::Intrinsic(ref procedure) => write!(f, "{}", procedure),
+            Expr::Builtin(ref procedure) => write!(f, "{}", procedure),
             Expr::Define(ref name, ref expr) => write!(f, "(define {} {})", name, *expr),
             Expr::Let(ref defs, ref body) => {
                 try!(write!(f, "(let ("));
@@ -270,7 +270,7 @@ fn eval_pair(head: &Rc<Expr>, tail: &Expr, env: &Rc<Environment>) -> EvalRes {
         }
         // intrinsic functions are wrapped in lambdas, thus it is not necassary to do any argument
         // number checking / currying
-        Expr::Intrinsic(ref procedure) => {
+        Expr::Builtin(ref procedure) => {
             // collect arguments and map them to the parameters
             let args = try!(collect_list(tail));
             procedure.apply(&args, env)
@@ -396,7 +396,7 @@ fn eval_sequence(exprs: &Vec<Rc<Expr>>, env: Rc<Environment>) -> EvalRes {
 mod tests {
     use std::rc::Rc;
     use environment::Environment;
-    use intrinsic::IntrinsicProc;
+    use builtin::BuiltinProc;
     use super::*;
 
     /// Checks if self-evaluating expressions evaluate to themselves.
@@ -437,7 +437,7 @@ mod tests {
         let y = Expr::new_number(5);
 
         assert_eq!(Expr::True,
-                   *eval(&Expr::new_list(vec![Expr::new_intrinsic(IntrinsicProc::Eq), x, y]),
+                   *eval(&Expr::new_list(vec![Expr::new_builtin(BuiltinProc::Eq), x, y]),
                          &env)
                         .unwrap());
     }

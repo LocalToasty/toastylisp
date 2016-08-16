@@ -5,7 +5,7 @@ use environment::Environment;
 
 /// Intrinsic procedures.
 #[derive(PartialEq,Debug)]
-pub enum IntrinsicProc {
+pub enum BuiltinProc {
     /// Addition
     Add,
     /// Subtraction
@@ -50,31 +50,31 @@ pub enum IntrinsicProc {
     Print,
 }
 
-impl IntrinsicProc {
+impl BuiltinProc {
     /// Returns the number of arguments taken by the intrinsic procedure.
     pub fn param_no(&self) -> usize {
         match *self {
-            IntrinsicProc::Add |
-            IntrinsicProc::Sub |
-            IntrinsicProc::Mul |
-            IntrinsicProc::Div |
-            IntrinsicProc::Mod |
-            IntrinsicProc::Eq |
-            IntrinsicProc::Lt |
-            IntrinsicProc::Gt |
-            IntrinsicProc::And |
-            IntrinsicProc::Or |
-            IntrinsicProc::Cons => 2,
-            IntrinsicProc::Not |
-            IntrinsicProc::Head |
-            IntrinsicProc::Tail |
-            IntrinsicProc::IsDefined |
-            IntrinsicProc::IsNumber |
-            IntrinsicProc::IsQuote |
-            IntrinsicProc::IsLambda |
-            IntrinsicProc::IsPair |
-            IntrinsicProc::IsNil |
-            IntrinsicProc::Print => 1,
+            BuiltinProc::Add |
+            BuiltinProc::Sub |
+            BuiltinProc::Mul |
+            BuiltinProc::Div |
+            BuiltinProc::Mod |
+            BuiltinProc::Eq |
+            BuiltinProc::Lt |
+            BuiltinProc::Gt |
+            BuiltinProc::And |
+            BuiltinProc::Or |
+            BuiltinProc::Cons => 2,
+            BuiltinProc::Not |
+            BuiltinProc::Head |
+            BuiltinProc::Tail |
+            BuiltinProc::IsDefined |
+            BuiltinProc::IsNumber |
+            BuiltinProc::IsQuote |
+            BuiltinProc::IsLambda |
+            BuiltinProc::IsPair |
+            BuiltinProc::IsNil |
+            BuiltinProc::Print => 1,
         }
     }
 
@@ -90,49 +90,49 @@ impl IntrinsicProc {
     pub fn apply(&self, args: &Vec<Rc<Expr>>, env: &Rc<Environment>) -> EvalRes {
         let args: Vec<_> = args.iter().map(|expr| eval(expr, env).unwrap()).collect();
         match *self {
-            IntrinsicProc::Add => {
+            BuiltinProc::Add => {
                 if let (&Expr::Number(i), &Expr::Number(j)) = (&*(args[0]), &*(args[1])) {
                     Ok(Expr::new_number(i + j))
                 } else {
                     Err(EvalErr::TypeErr)
                 }
             }
-            IntrinsicProc::Sub => {
+            BuiltinProc::Sub => {
                 if let (&Expr::Number(i), &Expr::Number(j)) = (&*(args[0]), &*(args[1])) {
                     Ok(Expr::new_number(i - j))
                 } else {
                     Err(EvalErr::TypeErr)
                 }
             }
-            IntrinsicProc::Mul => {
+            BuiltinProc::Mul => {
                 if let (&Expr::Number(i), &Expr::Number(j)) = (&*(args[0]), &*(args[1])) {
                     Ok(Expr::new_number(i * j))
                 } else {
                     Err(EvalErr::TypeErr)
                 }
             }
-            IntrinsicProc::Div => {
+            BuiltinProc::Div => {
                 if let (&Expr::Number(i), &Expr::Number(j)) = (&*(args[0]), &*(args[1])) {
                     Ok(Expr::new_number(i / j))
                 } else {
                     Err(EvalErr::TypeErr)
                 }
             }
-            IntrinsicProc::Mod => {
+            BuiltinProc::Mod => {
                 if let (&Expr::Number(i), &Expr::Number(j)) = (&*(args[0]), &*(args[1])) {
                     Ok(Expr::new_number(i % j))
                 } else {
                     Err(EvalErr::TypeErr)
                 }
             }
-            IntrinsicProc::Eq => {
+            BuiltinProc::Eq => {
                 if args[0] == args[1] {
                     Ok(Expr::new_true())
                 } else {
                     Ok(Expr::new_nil())
                 }
             }
-            IntrinsicProc::Gt => {
+            BuiltinProc::Gt => {
                 if let (&Expr::Number(i), &Expr::Number(j)) = (&*(args[0]), &*(args[1])) {
                     if i > j {
                         Ok(Expr::new_true())
@@ -143,7 +143,7 @@ impl IntrinsicProc {
                     Err(EvalErr::TypeErr)
                 }
             }
-            IntrinsicProc::Lt => {
+            BuiltinProc::Lt => {
                 if let (&Expr::Number(i), &Expr::Number(j)) = (&*(args[0]), &*(args[1])) {
                     if i < j {
                         Ok(Expr::new_true())
@@ -154,40 +154,40 @@ impl IntrinsicProc {
                     Err(EvalErr::TypeErr)
                 }
             }
-            IntrinsicProc::And => {
+            BuiltinProc::And => {
                 if *args[0] != Expr::Nil && *args[1] != Expr::Nil {
                     Ok(Expr::new_true())
                 } else {
                     Ok(Expr::new_nil())
                 }
             }
-            IntrinsicProc::Or => {
+            BuiltinProc::Or => {
                 if *args[0] != Expr::Nil || *args[1] != Expr::Nil {
                     Ok(Expr::new_true())
                 } else {
                     Ok(Expr::new_nil())
                 }
             }
-            IntrinsicProc::Not => {
+            BuiltinProc::Not => {
                 match *args[0] {
                     Expr::Nil => Ok(Expr::new_true()),
                     _ => Ok(Expr::new_nil()),
                 }
             }
-            IntrinsicProc::Cons => Ok(Expr::new_pair(args[0].clone(), args[1].clone())),
-            IntrinsicProc::Head => {
+            BuiltinProc::Cons => Ok(Expr::new_pair(args[0].clone(), args[1].clone())),
+            BuiltinProc::Head => {
                 match *args[0] {
                     Expr::Pair(ref head, _) => Ok(head.clone()),
                     _ => Err(EvalErr::TypeErr),
                 }
             }
-            IntrinsicProc::Tail => {
+            BuiltinProc::Tail => {
                 match *args[0] {
                     Expr::Pair(_, ref tail) => Ok(tail.clone()),
                     _ => Err(EvalErr::TypeErr),
                 }
             }
-            IntrinsicProc::IsDefined => {
+            BuiltinProc::IsDefined => {
                 if let Expr::Symbol(ref name) = *args[0] {
                     if env.is_defined(name) {
                         Ok(Expr::new_true())
@@ -198,37 +198,37 @@ impl IntrinsicProc {
                     Err(EvalErr::TypeErr)
                 }
             }
-            IntrinsicProc::IsQuote => {
+            BuiltinProc::IsQuote => {
                 match *args[0] {
                     Expr::Quote(_) => Ok(Expr::new_true()),
                     _ => Ok(Expr::new_nil()),
                 }
             }
-            IntrinsicProc::IsNumber => {
+            BuiltinProc::IsNumber => {
                 match *args[0] {
                     Expr::Number(_) => Ok(Expr::new_true()),
                     _ => Ok(Expr::new_nil()),
                 }
             }
-            IntrinsicProc::IsLambda => {
+            BuiltinProc::IsLambda => {
                 match *args[0] {
                     Expr::Number(_) => Ok(Expr::new_true()),
                     _ => Ok(Expr::new_nil()),
                 }
             }
-            IntrinsicProc::IsPair => {
+            BuiltinProc::IsPair => {
                 match *args[0] {
                     Expr::Pair(..) => Ok(Expr::new_true()),
                     _ => Ok(Expr::new_nil()),
                 }
             }
-            IntrinsicProc::IsNil => {
+            BuiltinProc::IsNil => {
                 match *args[0] {
                     Expr::Nil => Ok(Expr::new_true()),
                     _ => Ok(Expr::new_nil()),
                 }
             }
-            IntrinsicProc::Print => {
+            BuiltinProc::Print => {
                 println!("{}", args[0]);
                 Ok(Expr::new_nil())
             }
@@ -236,30 +236,30 @@ impl IntrinsicProc {
     }
 }
 
-impl fmt::Display for IntrinsicProc {
+impl fmt::Display for BuiltinProc {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            IntrinsicProc::Add => write!(f, "intrinsic.+"),
-            IntrinsicProc::Sub => write!(f, "intrinsic.-"),
-            IntrinsicProc::Mul => write!(f, "intrinsic.*"),
-            IntrinsicProc::Div => write!(f, "intrinsic./"),
-            IntrinsicProc::Mod => write!(f, "intrinsic.mod"),
-            IntrinsicProc::Eq => write!(f, "intrinsic.="),
-            IntrinsicProc::Lt => write!(f, "intrinsic.<"),
-            IntrinsicProc::Gt => write!(f, "intrinsic.>"),
-            IntrinsicProc::And => write!(f, "intrinsic.and"),
-            IntrinsicProc::Or => write!(f, "intrinsic.or"),
-            IntrinsicProc::Not => write!(f, "intrinsic.not"),
-            IntrinsicProc::Cons => write!(f, "intrinsic.cons"),
-            IntrinsicProc::Head => write!(f, "intrinsic.head"),
-            IntrinsicProc::Tail => write!(f, "intrinsic.tail"),
-            IntrinsicProc::IsDefined => write!(f, "intrinsic.defined?"),
-            IntrinsicProc::IsQuote => write!(f, "intrinsic.quote?"),
-            IntrinsicProc::IsNumber => write!(f, "intrinsic.number?"),
-            IntrinsicProc::IsLambda => write!(f, "intrinsic.lambda?"),
-            IntrinsicProc::IsPair => write!(f, "intrinsic.pair?"),
-            IntrinsicProc::IsNil => write!(f, "intrinsic.nil?"),
-            IntrinsicProc::Print => write!(f, "intrinsic.print!"),
+            BuiltinProc::Add => write!(f, "builtin.+"),
+            BuiltinProc::Sub => write!(f, "builtin.-"),
+            BuiltinProc::Mul => write!(f, "builtin.*"),
+            BuiltinProc::Div => write!(f, "builtin./"),
+            BuiltinProc::Mod => write!(f, "builtin.mod"),
+            BuiltinProc::Eq => write!(f, "builtin.="),
+            BuiltinProc::Lt => write!(f, "builtin.<"),
+            BuiltinProc::Gt => write!(f, "builtin.>"),
+            BuiltinProc::And => write!(f, "builtin.and"),
+            BuiltinProc::Or => write!(f, "builtin.or"),
+            BuiltinProc::Not => write!(f, "builtin.not"),
+            BuiltinProc::Cons => write!(f, "builtin.cons"),
+            BuiltinProc::Head => write!(f, "builtin.head"),
+            BuiltinProc::Tail => write!(f, "builtin.tail"),
+            BuiltinProc::IsDefined => write!(f, "builtin.defined?"),
+            BuiltinProc::IsQuote => write!(f, "builtin.quote?"),
+            BuiltinProc::IsNumber => write!(f, "builtin.number?"),
+            BuiltinProc::IsLambda => write!(f, "builtin.lambda?"),
+            BuiltinProc::IsPair => write!(f, "builtin.pair?"),
+            BuiltinProc::IsNil => write!(f, "builtin.nil?"),
+            BuiltinProc::Print => write!(f, "builtin.print!"),
         }
     }
 }
