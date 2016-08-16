@@ -98,14 +98,17 @@ impl fmt::Display for Expr {
             Expr::Pair(ref head, ref tail) => {
                 try!(write!(f, "({}", head));
                 let mut remainder = tail;
+                // as long as the pairs resemble a linked list, render them as such
                 while let Expr::Pair(ref head, ref tail) = **remainder {
                     try!(write!(f, " {}", head));
                     remainder = tail;
                 }
+
+                // if the last element is a nil, render it as a list, otherwise as a pair
                 if let Expr::Nil = **remainder {
                     write!(f, ")")
                 } else {
-                    write!(f, "{})", remainder)
+                    write!(f, " . {})", remainder)
                 }
             }
 
