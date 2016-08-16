@@ -44,9 +44,9 @@ named!(cond<Rc<Expr> >,
                                    cons: expr ~ opt!(multispace) ~
                                    char!(')'),
                                    || (pred, cons))) ~
-              alt: opt!(expr) ~ opt!(multispace) ~
+              opt!(multispace) ~
               char!(')'),
-              || Expr::new_cond(cases, alt)));
+              || Expr::new_cond(cases)));
 
 named!(let_expr<Rc<Expr> >,
        chain!(char!('(') ~ opt!(multispace) ~

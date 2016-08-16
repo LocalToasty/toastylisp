@@ -39,31 +39,19 @@ Otherwise the result of `alt` is returned.
 (cond (*pred_1* *cons_1*)
       (*pred_2* *cons_2*)
        ...
-      (*pred_n* *cons_n*)
-      [*alt*])
+      (*pred_n* *cons_n*))
 ```
 
 The cond form is an extension of the if form; instead of only one arm, there are multiple, each with its own predicate.
 The cond clause evaluates to the result of the first consequence `cons_i` for which the predicate `pred_i` evaluates to a value which is not nil.
-If none of the predicates evaluates to a value which is not nil, the result of the `alt` expression is returned.
-If there is no alternative expression, the program terminates with an error.
-
-A cond clause which posesses the `alt` expression is semantically equivalent to
-
-```lisp
-(if *pred_1* *cons_1*
-(if *pred_2* *cons_2*
- ...
-(if *pred_n* *cons_n*
-  *alt*)...))
-```
+If none of the predicates evaluate to true, the program terminates.
 
 The following expression returns `negative` if x is less than 0, `positive` if x is greater than 0 and `zero` otherwise.
 
 ```lisp
 (cond ((< x 0) 'negative))
       ((> x 0) 'positive)
-      'zero)
+      (true    'zero)
 ```
 
 

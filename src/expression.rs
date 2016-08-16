@@ -10,7 +10,7 @@ pub enum Expr {
     Quote(Rc<Expr>),
     Pair(Rc<Expr>, Rc<Expr>),
     If(Rc<Expr>, Rc<Expr>, Rc<Expr>),
-    Cond(Vec<(Rc<Expr>, Rc<Expr>)>, Option<Rc<Expr>>),
+    Cond(Vec<(Rc<Expr>, Rc<Expr>)>),
     Number(i32),
     Builtin(BuiltinProc),
     Lambda(Vec<String>, Rc<Expr>, Option<Rc<Environment>>),
@@ -44,8 +44,8 @@ impl Expr {
         Rc::new(Expr::If(pred, cons, alt))
     }
 
-    pub fn new_cond(cases: Vec<(Rc<Expr>, Rc<Expr>)>, alt: Option<Rc<Expr>>) -> Rc<Expr> {
-        Rc::new(Expr::Cond(cases, alt))
+    pub fn new_cond(cases: Vec<(Rc<Expr>, Rc<Expr>)>) -> Rc<Expr> {
+        Rc::new(Expr::Cond(cases))
     }
 
     pub fn new_number(num: i32) -> Rc<Expr> {
@@ -113,14 +113,11 @@ impl fmt::Display for Expr {
             }
 
             Expr::If(ref pred, ref cons, ref alt) => write!(f, "(if {} {} {})", *pred, *cons, *alt),
-            Expr::Cond(ref cases, ref alt) => {
+            Expr::Cond(ref cases) => {
                 try!(write!(f, "(cond"));
                 for case in cases {
                     let (ref pred, ref cons) = *case;
                     try!(write!(f, " ({} {})", pred, cons));
-                }
-                if let Some(ref expr) = *alt {
-                    try!(write!(f, " {}", expr));
                 }
                 write!(f, ")")
             }
@@ -198,7 +195,7 @@ pub fn eval(expr: &Rc<Expr>, env: &Rc<Environment>) -> EvalRes {
         Expr::Quote(ref e) => Ok(e.clone()),
         Expr::Pair(ref head, ref tail) => eval_pair(head, tail, env),
         Expr::If(ref pred, ref cons, ref alt) => eval_if(pred, cons, alt, env),
-        Expr::Cond(ref cases, ref alt) => eval_cond(cases, alt, env),
+        Expr::Cond(ref cases) => eval_cond(cases, env),
         Expr::Define(_, ref expr) => eval(expr, env),
         Expr::Let(ref defs, ref body) => eval_let(defs, body, env.clone()),
         Expr::Lambda(ref params, ref body, ref lambda_env) => {
@@ -315,12 +312,9 @@ fn eval_if(pred: &Rc<Expr>, cons: &Rc<Expr>, alt: &Rc<Expr>, env: &Rc<Environmen
 ///
 /// # Errors
 ///
-/// If none of the predicates evaluate to a value different from nil, and no alt expression is
-/// given, EvalErr::NonExhaustivePattern is returned.
-fn eval_cond(cases: &Vec<(Rc<Expr>, Rc<Expr>)>,
-             alt: &Option<Rc<Expr>>,
-             env: &Rc<Environment>)
-             -> EvalRes {
+/// If none of the predicates evaluate to a value different from nil, EvalErr::NonExhaustivePattern
+/// is returned.
+fn eval_cond(cases: &Vec<(Rc<Expr>, Rc<Expr>)>, env: &Rc<Environment>) -> EvalRes {
     for case in cases {
         let (ref pred, ref cons) = *case;
         if *try!(eval(&pred, env)) != Expr::Nil {
@@ -328,11 +322,7 @@ fn eval_cond(cases: &Vec<(Rc<Expr>, Rc<Expr>)>,
         }
     }
 
-    if let Some(ref expr) = *alt {
-        eval(expr, env)
-    } else {
-        Err(EvalErr::NonExhaustivePattern)
-    }
+    Err(EvalErr::NonExhaustivePattern)
 }
 
 /// Evaluates a let expression.
