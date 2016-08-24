@@ -4,9 +4,7 @@
 
 ### Quote ###
 
-```lisp
 '*expr*
-```
 
 The quotation form returns the expression it quotes when it is evaluated.
 
@@ -18,9 +16,7 @@ The quotation form returns the expression it quotes when it is evaluated.
 
 ### if ###
 
-```lisp
-(if *pred* *cons* *alt*)
-```
+(**if** *pred* *cons* *alt*)
 
 If `pred` evaluates to a value which is not nil, the result of `cons` will be returned.
 Otherwise the result of `alt` is returned.
@@ -35,12 +31,10 @@ Otherwise the result of `alt` is returned.
 
 ### cond ###
 
-```lisp
-(cond (*pred_1* *cons_1*)
-      (*pred_2* *cons_2*)
-       ...
-      (*pred_n* *cons_n*))
-```
+(**cond** (*pred_1* *cons_1*)
+          (*pred_2* *cons_2*)
+           ...
+          (*pred_n* *cons_n*))
 
 The cond form is an extension of the if form; instead of only one arm, there are multiple, each with its own predicate.
 The cond clause evaluates to the result of the first consequence `cons_i` for which the predicate `pred_i` evaluates to a value which is not nil.
@@ -57,13 +51,11 @@ The following expression returns `negative` if x is less than 0, `positive` if x
 
 ### let ###
 
-```lisp
-(let ((*symb_1* *expr_1*)
-      (*symb_2* *expr_2*)
-       ...
-      (*symb_n* *expr_n*))
+(**let** ((*symb_1* *expr_1*)
+          (*symb_2* *expr_2*)
+           ...
+          (*symb_n* *expr_n*))
   *body*)
-```
 
 The let form defines a set of symbols for the expriession `body`.
 The definitions are done in order, meaning that the *n*-th definition can refer to every symbol `symb_i` with *i* < *n*.
@@ -79,9 +71,7 @@ Each symbol must only be defined once; redefinition is forbidden within a let fo
 
 ### define ###
 
-```lisp
-(define *symb* *expr*)
-```
+(**define** *symb* *expr*)
 
 Defines the symbol `symb` as `expr` within the current scope, and returns the evaluated expression.
 Each symbol may only be defined once per scope.
@@ -95,9 +85,7 @@ Each symbol may only be defined once per scope.
 
 ### lambda ###
 
-```lisp
-(lambda (*param_1* ... *param_n*) *body*)
-```
+(**lambda** (*param_1* ... *param_n*) *body*)
 
 Returns an anonymous function object with the parameters `param` and the body `body`.
 If the lambda is invoked with the correct amount of arguments, the functions body is evaluated with `param_1` defined as the first argument, `param_2` with the second argument, and so forth.
@@ -134,9 +122,7 @@ This function calculates the greatest common divisor of two numbers `a` and `b` 
 
 ### Function Application ###
 
-```lisp
 (*proc* *arg_1* ... *arg_n*)
-```
 
 Applies the arguments `arg_1` ... `arg_n` to the procedure `proc`.
 If the number of arguments matches the number of the procedure's parameters, the procedure's body is evaluated with its parameters `param_i` defined as `arg_i`.
