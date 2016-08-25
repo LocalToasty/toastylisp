@@ -123,13 +123,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn clusterfuck() {
-        let prog = "(define foo (lambda () foo)) (let ((bar foo) (foo 0)) (bar))";
-        assert_eq!(*parse_and_eval(prog.as_bytes()), Expr::Number(0));
-    }
-
-    #[test]
     fn fibonacci() {
         let prog = "(define fib (lambda (n) (if (= n 0) 0 (if (= n 1) 1 (+ (fib (- n 1)) (fib (- \
                     n 2))))))) (fib 10)";
