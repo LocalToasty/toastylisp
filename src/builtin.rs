@@ -1,10 +1,10 @@
 use std::rc::Rc;
 use std::fmt;
-use expression::{Expr, eval, EvalRes, EvalErr};
+use expression::{Expr, Type, eval, EvalRes, EvalErr};
 use environment::Environment;
 
 /// Intrinsic procedures.
-#[derive(PartialEq,Debug)]
+#[derive(PartialEq,Debug,Clone)]
 pub enum BuiltinProc {
     /// Addition
     Add,
@@ -38,6 +38,8 @@ pub enum BuiltinProc {
     IsDefined,
     /// Check if expression evaluates to a number.
     IsNumber,
+    /// Check if expression evaluates to a boolean.
+    IsBoolean,
     /// Check if expression evaluates to a quotation.
     IsQuote,
     /// Check if expression evaluates to a lambda.
@@ -70,6 +72,7 @@ impl BuiltinProc {
             BuiltinProc::Tail |
             BuiltinProc::IsDefined |
             BuiltinProc::IsNumber |
+            BuiltinProc::IsBoolean |
             BuiltinProc::IsQuote |
             BuiltinProc::IsLambda |
             BuiltinProc::IsPair |
@@ -87,152 +90,204 @@ impl BuiltinProc {
     /// # Panics
     ///
     /// The function panics if too few arguments are supplied.
-    pub fn apply(&self, args: &Vec<Rc<Expr>>, env: &Rc<Environment>) -> EvalRes {
-        let args: Vec<_> = args.iter().map(|expr| eval(expr, env).unwrap()).collect();
+    pub fn eval(&self, args: &Vec<Rc<Expr>>, env: &Rc<Environment>) -> EvalRes {
         match *self {
-            BuiltinProc::Add => {
-                if let (&Expr::Number(i), &Expr::Number(j)) = (&*(args[0]), &*(args[1])) {
-                    Ok(Expr::new_number(i + j))
-                } else {
-                    Err(EvalErr::TypeErr)
-                }
-            }
-            BuiltinProc::Sub => {
-                if let (&Expr::Number(i), &Expr::Number(j)) = (&*(args[0]), &*(args[1])) {
-                    Ok(Expr::new_number(i - j))
-                } else {
-                    Err(EvalErr::TypeErr)
-                }
-            }
-            BuiltinProc::Mul => {
-                if let (&Expr::Number(i), &Expr::Number(j)) = (&*(args[0]), &*(args[1])) {
-                    Ok(Expr::new_number(i * j))
-                } else {
-                    Err(EvalErr::TypeErr)
-                }
-            }
-            BuiltinProc::Div => {
-                if let (&Expr::Number(i), &Expr::Number(j)) = (&*(args[0]), &*(args[1])) {
-                    Ok(Expr::new_number(i / j))
-                } else {
-                    Err(EvalErr::TypeErr)
-                }
-            }
-            BuiltinProc::Mod => {
-                if let (&Expr::Number(i), &Expr::Number(j)) = (&*(args[0]), &*(args[1])) {
-                    Ok(Expr::new_number(i % j))
-                } else {
-                    Err(EvalErr::TypeErr)
-                }
-            }
-            BuiltinProc::Eq => {
-                if args[0] == args[1] {
-                    Ok(Expr::new_true())
-                } else {
-                    Ok(Expr::new_nil())
-                }
-            }
-            BuiltinProc::Gt => {
-                if let (&Expr::Number(i), &Expr::Number(j)) = (&*(args[0]), &*(args[1])) {
-                    if i > j {
-                        Ok(Expr::new_true())
-                    } else {
-                        Ok(Expr::new_nil())
-                    }
-                } else {
-                    Err(EvalErr::TypeErr)
-                }
-            }
-            BuiltinProc::Lt => {
-                if let (&Expr::Number(i), &Expr::Number(j)) = (&*(args[0]), &*(args[1])) {
-                    if i < j {
-                        Ok(Expr::new_true())
-                    } else {
-                        Ok(Expr::new_nil())
-                    }
-                } else {
-                    Err(EvalErr::TypeErr)
-                }
-            }
-            BuiltinProc::And => {
-                if *args[0] != Expr::Nil && *args[1] != Expr::Nil {
-                    Ok(Expr::new_true())
-                } else {
-                    Ok(Expr::new_nil())
-                }
-            }
-            BuiltinProc::Or => {
-                if *args[0] != Expr::Nil || *args[1] != Expr::Nil {
-                    Ok(Expr::new_true())
-                } else {
-                    Ok(Expr::new_nil())
-                }
-            }
+            BuiltinProc::Add |
+            BuiltinProc::Sub |
+            BuiltinProc::Mul |
+            BuiltinProc::Div |
+            BuiltinProc::Mod |
+            BuiltinProc::Lt |
+            BuiltinProc::Gt => self.eval_numeric(args, env),
+            BuiltinProc::Eq => BuiltinProc::eval_equal(args, env),
+            BuiltinProc::And | BuiltinProc::Or => self.eval_logic_junctor(args, env),
             BuiltinProc::Not => {
-                match *args[0] {
-                    Expr::Nil => Ok(Expr::new_true()),
-                    _ => Ok(Expr::new_nil()),
+                match *try!(eval(&args[0], env)) {
+                    Expr::Boolean(val) => Ok(Expr::new_boolean(!val)),
+                    ref res @ _ => {
+                        Err(EvalErr::TypeErr {
+                            expected: Type::Boolean,
+                            found: res.get_type(),
+                        })
+                    }
                 }
             }
-            BuiltinProc::Cons => Ok(Expr::new_pair(args[0].clone(), args[1].clone())),
-            BuiltinProc::Head => {
-                match *args[0] {
-                    Expr::Pair(ref head, _) => Ok(head.clone()),
-                    _ => Err(EvalErr::TypeErr),
-                }
-            }
-            BuiltinProc::Tail => {
-                match *args[0] {
-                    Expr::Pair(_, ref tail) => Ok(tail.clone()),
-                    _ => Err(EvalErr::TypeErr),
-                }
-            }
+            BuiltinProc::Cons => BuiltinProc::eval_cons(args, env),
+            BuiltinProc::Head | BuiltinProc::Tail => self.eval_head_tail(args, env),
             BuiltinProc::IsDefined => {
                 if let Expr::Symbol(ref name) = *args[0] {
                     if env.is_defined(name) {
-                        Ok(Expr::new_true())
+                        Ok(Expr::new_boolean(true))
                     } else {
-                        Ok(Expr::new_nil())
+                        Ok(Expr::new_boolean(false))
                     }
                 } else {
-                    Err(EvalErr::TypeErr)
+                    Err(EvalErr::TypeErr {
+                        expected: Type::Symbol,
+                        found: args[0].get_type(),
+                    })
                 }
             }
             BuiltinProc::IsQuote => {
-                match *args[0] {
-                    Expr::Quote(_) => Ok(Expr::new_true()),
-                    _ => Ok(Expr::new_nil()),
+                match *try!(eval(&args[0], env)) {
+                    Expr::Quote(_) => Ok(Expr::new_boolean(true)),
+                    _ => Ok(Expr::new_boolean(false)),
                 }
             }
             BuiltinProc::IsNumber => {
-                match *args[0] {
-                    Expr::Number(_) => Ok(Expr::new_true()),
-                    _ => Ok(Expr::new_nil()),
+                match *try!(eval(&args[0], env)) {
+                    Expr::Number(_) => Ok(Expr::new_boolean(true)),
+                    _ => Ok(Expr::new_boolean(false)),
+                }
+            }
+            BuiltinProc::IsBoolean => {
+                match *try!(eval(&args[0], env)) {
+                    Expr::Boolean(_) => Ok(Expr::new_boolean(true)),
+                    _ => Ok(Expr::new_boolean(false)),
                 }
             }
             BuiltinProc::IsLambda => {
-                match *args[0] {
-                    Expr::Number(_) => Ok(Expr::new_true()),
-                    _ => Ok(Expr::new_nil()),
+                match *try!(eval(&args[0], env)) {
+                    Expr::Number(_) => Ok(Expr::new_boolean(true)),
+                    _ => Ok(Expr::new_boolean(false)),
                 }
             }
             BuiltinProc::IsPair => {
-                match *args[0] {
-                    Expr::Pair(..) => Ok(Expr::new_true()),
-                    _ => Ok(Expr::new_nil()),
+                match *try!(eval(&args[0], env)) {
+                    Expr::Pair(..) => Ok(Expr::new_boolean(true)),
+                    _ => Ok(Expr::new_boolean(false)),
                 }
             }
             BuiltinProc::IsNil => {
-                match *args[0] {
-                    Expr::Nil => Ok(Expr::new_true()),
-                    _ => Ok(Expr::new_nil()),
+                match *try!(eval(&args[0], env)) {
+                    Expr::Nil => Ok(Expr::new_boolean(true)),
+                    _ => Ok(Expr::new_boolean(false)),
                 }
             }
-            BuiltinProc::Print => {
-                println!("{}", args[0]);
-                Ok(Expr::new_nil())
+            BuiltinProc::Print => BuiltinProc::eval_print(args, env),
+        }
+    }
+
+    fn eval_numeric(&self, args: &Vec<Rc<Expr>>, env: &Rc<Environment>) -> EvalRes {
+        let mut evald_args = Vec::new();
+        for arg in args {
+            let res = try!(eval(arg, env));
+            if let Expr::Number(n) = *res {
+                evald_args.push(n)
+            } else {
+                return Err(EvalErr::TypeErr {
+                    expected: Type::Number,
+                    found: res.get_type(),
+                });
             }
         }
+
+        let mut iter = evald_args.iter();
+
+        match *self {
+            BuiltinProc::Add => Ok(Expr::new_number(iter.fold(0, |acc, x| acc + x))),
+            BuiltinProc::Sub => {
+                let first = iter.next().unwrap();
+                Ok(Expr::new_number(iter.fold(*first, |acc, x| acc - x)))
+            }
+            BuiltinProc::Mul => Ok(Expr::new_number(iter.fold(1, |acc, x| acc * x))),
+            BuiltinProc::Div => {
+                let first = iter.next().unwrap();
+                Ok(Expr::new_number(iter.fold(*first, |acc, x| acc / x)))
+            }
+            BuiltinProc::Mod => {
+                let first = iter.next().unwrap();
+                Ok(Expr::new_number(iter.fold(*first, |acc, x| acc % x)))
+            }
+            BuiltinProc::Lt => {
+                let mut last = iter.next().unwrap();
+                while let Some(curr) = iter.next() {
+                    if !(last < curr) {
+                        return Ok(Expr::new_boolean(false));
+                    }
+                    last = curr;
+                }
+                Ok(Expr::new_boolean(true))
+            }
+            BuiltinProc::Gt => {
+                let mut last = iter.next().unwrap();
+                while let Some(curr) = iter.next() {
+                    if !(last > curr) {
+                        return Ok(Expr::new_boolean(false));
+                    }
+                    last = curr;
+                }
+                Ok(Expr::new_boolean(true))
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn eval_equal(args: &Vec<Rc<Expr>>, env: &Rc<Environment>) -> EvalRes {
+        let mut iter = args.iter();
+        let mut last = try!(eval(iter.next().unwrap(), env));
+        for arg in iter {
+            let curr = try!(eval(arg, env));
+            if last != curr {
+                return Ok(Expr::new_boolean(false));
+            }
+            last = curr;
+        }
+        Ok(Expr::new_boolean(true))
+    }
+
+    fn eval_logic_junctor(&self, args: &Vec<Rc<Expr>>, env: &Rc<Environment>) -> EvalRes {
+        let mut evald_args = Vec::new();
+        for arg in args {
+            let res = try!(eval(arg, env));
+            if let Expr::Boolean(n) = *res {
+                evald_args.push(n)
+            } else {
+                return Err(EvalErr::TypeErr {
+                    expected: Type::Boolean,
+                    found: res.get_type(),
+                });
+            }
+        }
+
+        let iter = evald_args.iter();
+
+        match *self {
+            BuiltinProc::And => Ok(Expr::new_boolean(iter.fold(true, |acc, &x| acc && x))),
+            BuiltinProc::Or => Ok(Expr::new_boolean(iter.fold(false, |acc, &x| acc || x))),
+            _ => unreachable!(),
+        }
+    }
+
+    fn eval_cons(args: &Vec<Rc<Expr>>, env: &Rc<Environment>) -> EvalRes {
+        let head = try!(eval(&args[0], env));
+        let tail = try!(eval(&args[1], env));
+        Ok(Expr::new_pair(head, tail))
+    }
+
+    fn eval_head_tail(&self, args: &Vec<Rc<Expr>>, env: &Rc<Environment>) -> EvalRes {
+        match *try!(eval(&args[0], env)) {
+            Expr::Pair(ref head, ref tail) => {
+                match *self {
+                    BuiltinProc::Head => Ok(head.clone()),
+                    BuiltinProc::Tail => Ok(tail.clone()),
+                    _ => unreachable!(),
+                }
+            }
+            ref res @ _ => {
+                Err(EvalErr::TypeErr {
+                    expected: Type::Pair,
+                    found: res.get_type(),
+                })
+            }
+        }
+    }
+
+    fn eval_print(args: &Vec<Rc<Expr>>, env: &Rc<Environment>) -> EvalRes {
+        for arg in args {
+            println!("{}", try!(eval(arg, env)));
+        }
+        Ok(Expr::new_nil())
     }
 }
 
@@ -256,6 +311,7 @@ impl fmt::Display for BuiltinProc {
             BuiltinProc::IsDefined => write!(f, "builtin.defined?"),
             BuiltinProc::IsQuote => write!(f, "builtin.quote?"),
             BuiltinProc::IsNumber => write!(f, "builtin.number?"),
+            BuiltinProc::IsBoolean => write!(f, "builtin.boolean?"),
             BuiltinProc::IsLambda => write!(f, "builtin.lambda?"),
             BuiltinProc::IsPair => write!(f, "builtin.pair?"),
             BuiltinProc::IsNil => write!(f, "builtin.nil?"),

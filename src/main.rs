@@ -151,7 +151,7 @@ mod tests {
                       (lambda (n) \
                         (cond ((= n 0) 0) \
                               ((= n 1) 1) \
-                              (true (+ (fib (- n 1)) (fib (- n 2))))))) \
+                              (#true (+ (fib (- n 1)) (fib (- n 2))))))) \
                     (fib 10)";
         assert_eq!(*parse_and_eval(prog.as_bytes()), Expr::Number(55));
     }
@@ -162,9 +162,9 @@ mod tests {
                       (lambda (a b) \
                         (lambda (left) \
                           (if left a b)))) \
-                    (define own-head (lambda (xs) (xs true))) \
-                    (define own-tail (lambda (xs) (xs nil))) \
-                    (define list (own-cons 1 (own-cons 2 (own-cons 3 nil)))) \
+                    (define own-head (lambda (xs) (xs #true))) \
+                    (define own-tail (lambda (xs) (xs #false))) \
+                    (define list (own-cons 1 (own-cons 2 (own-cons 3 #nil)))) \
                     (own-head (own-tail list))";
         assert_eq!(*parse_and_eval(prog.as_bytes()), Expr::Number(2));
     }

@@ -36,6 +36,8 @@ impl Environment {
                    Expr::new_builtin(BuiltinProc::IsDefined));
         env.insert(String::from("number?"),
                    Expr::new_builtin(BuiltinProc::IsNumber));
+        env.insert(String::from("boolean?"),
+                   Expr::new_builtin(BuiltinProc::IsBoolean));
         env.insert(String::from("quote?"),
                    Expr::new_builtin(BuiltinProc::IsQuote));
         env.insert(String::from("lambda?"),
@@ -45,9 +47,6 @@ impl Environment {
         env.insert(String::from("nil?"), Expr::new_builtin(BuiltinProc::IsNil));
         env.insert(String::from("print!"),
                    Expr::new_builtin(BuiltinProc::Print));
-
-        env.insert(String::from("true"), Expr::new_true());
-        env.insert(String::from("nil"), Expr::new_nil());
 
         env
     }

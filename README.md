@@ -18,7 +18,8 @@ The quotation form returns the expression it quotes when it is evaluated.
 
 (**if** *pred* *cons* *alt*)
 
-If `pred` evaluates to a value which is not nil, the result of `cons` will be returned.
+`pred` has to evaluate to a boolean.
+If `pred` evaluates to `#true`, the result of `cons` will be returned.
 Otherwise the result of `alt` is returned.
 
 ```lisp
@@ -37,15 +38,16 @@ Otherwise the result of `alt` is returned.
           (*pred_n* *cons_n*))
 
 The cond form is an extension of the if form; instead of only one arm, there are multiple, each with its own predicate.
-The cond clause evaluates to the result of the first consequence `cons_i` for which the predicate `pred_i` evaluates to a value which is not nil.
-If none of the predicates evaluate to true, the program terminates.
+The cond clause evaluates to the result of the first consequence `cons_i` for which the predicate `pred_i` evaluates to `#true`.
+Each reachable `pred_i` has to evaluate to a boolean.
+If none of the predicates evaluate to `#true`, the program terminates.
 
 The following expression returns `negative` if x is less than 0, `positive` if x is greater than 0 and `zero` otherwise.
 
 ```lisp
 (cond ((< x 0) 'negative))
       ((> x 0) 'positive)
-      (true    'zero)
+      (#true   'zero)
 ```
 
 
@@ -202,62 +204,62 @@ Calculates the remainder of a division.
 Checks if two values are equal.
 
 ```lisp
-(= 3 3) -> true
-(= 3 5) -> nil
-(= 'foo 'foo) -> true
-(= '(1 2 3) '(1 2 3)) -> true
+(= 3 3) -> #true
+(= 3 5) -> #nil
+(= 'foo 'foo) -> #true
+(= '(1 2 3) '(1 2 3)) -> #true
 ```
 
 
 ### < ###
 
-Returns true if and only if the first argument is less than the second.
+Returns #true if and only if the first argument is less than the second.
 
 ```lisp
-(< 1 2) -> true
-(< 2 1) -> nil
+(< 1 2) -> #true
+(< 2 1) -> #nil
 ```
 
 
 ### > ###
 
-Returns true if and only if the first argument is greater than the second.
+Returns #true if and only if the first argument is greater than the second.
 
 ```lisp
-(> 1 2) -> nil
-(> 2 1) -> true
+(> 1 2) -> #nil
+(> 2 1) -> #true
 ```
 
 
 ### and ###
 
-Returns true if and only if both arguments are not nil.
+Returns #true if and only if both arguments are not #nil.
 
 ```lisp
-(and (> 5 3) (< 2 5)) -> true
-(and (< 5 3) (< 2 5)) -> false
-(and (< 5 3) (> 2 5)) -> false
+(and (> 5 3) (< 2 5)) -> #true
+(and (< 5 3) (< 2 5)) -> #false
+(and (< 5 3) (> 2 5)) -> #false
 ```
 
 
 ### or ###
 
-Returns true if at least one of the arguments is not nil.
+Returns #true if at least one of the arguments is not #nil.
 
 ```lisp
-(or (> 5 3) (< 2 5)) -> true
-(or (< 5 3) (< 2 5)) -> true
-(or (< 5 3) (> 2 5)) -> false
+(or (> 5 3) (< 2 5)) -> #true
+(or (< 5 3) (< 2 5)) -> #true
+(or (< 5 3) (> 2 5)) -> #false
 ```
 
 
 ### not ###
 
-Returns true if the argument is nil, nil otherwise.
+Returns #true if the argument is #nil, #nil otherwise.
 
 ```lisp
-(not (< 5 3)) -> true
-(not (> 5 3)) -> nil
+(not (< 5 3)) -> #true
+(not (> 5 3)) -> #nil
 ```
 
 
@@ -268,7 +270,7 @@ Lists are represented as nested pairs, with the first element of the pair being 
 
 ```lisp
 (cons 'left 'right) -> (left . right)
-(cons 1 (cons 2 (cons 3 nil))) -> (1 2 3)
+(cons 1 (cons 2 (cons 3 #nil))) -> (1 2 3)
 ```
 
 
@@ -288,12 +290,12 @@ If the argument is a list, its first element is returned.
 
 Retrieves the second element of a pair.
 If the argument is a list, the lists tail (i.e. all but the first element) is returned.
-If the list only has one element, the tail is the empty list, i.e. nil.
+If the list only has one element, the tail is the empty list, i.e. #nil.
 
 ```lisp
 (tail (cons 'left 'right)) -> tail
 (tail '(1 2 3)) -> '(2 3)
-(tail '(1)) -> nil
+(tail '(1)) -> #nil
 ```
 
 
@@ -305,8 +307,8 @@ Checks if *symbol* is defined.
 
 ```lisp
 (define x 3)
-(defined? 'x) -> true
-(defined? 'y) -> false
+(defined? 'x) -> #true
+(defined? 'y) -> #false
 (defined? x) -> Type error: Expected a symbol, found a number
 ```
 
@@ -318,11 +320,11 @@ Checks if *symbol* is defined.
 Checks if *expr* evaluates to a number.
 
 ```lisp
-(number? 1) -> true
+(number? 1) -> #true
 (define x 3)
-(number? x) -> true
-(number? (+ 1 2)) -> true
-(number? '(1)) -> false
+(number? x) -> #true
+(number? (+ 1 2)) -> #true
+(number? '(1)) -> #false
 ```
 
 
@@ -333,8 +335,8 @@ Checks if *expr* evaluates to a number.
 Checks if *expr* evaluates to a quote.
 
 ```lisp
-(quote? 'foo) -> false
-(quote? ''foo) -> true
+(quote? 'foo) -> #false
+(quote? ''foo) -> #true
 ```
 
 
@@ -345,10 +347,10 @@ Checks if *expr* evaluates to a quote.
 Checks if *expr* evaluates to a lambda.
 
 ```lisp
-(lambda? (lambda (x) (* x x))) -> true
-(lambda? +) -> true
-(lambda? (+ 2)) -> true
-(lambda? (+ 2 3)) -> nil
+(lambda? (lambda (x) (* x x))) -> #true
+(lambda? +) -> #true
+(lambda? (+ 2)) -> #true
+(lambda? (+ 2 3)) -> #nil
 ```
 
 
@@ -359,9 +361,9 @@ Checks if *expr* evaluates to a lambda.
 Checks if *expr* evaluates to a pair.
 
 ```lisp
-(pair? (cons 1 2)) -> true
-(pair? '(1 2 3)) -> true
-(pair? 42) -> nil
+(pair? (cons 1 2)) -> #true
+(pair? '(1 2 3)) -> #true
+(pair? 42) -> #nil
 ```
 
 
@@ -369,12 +371,12 @@ Checks if *expr* evaluates to a pair.
 
 (**nil?** *expr*)
 
-Checks if *expr* evaluates to nil.
+Checks if *expr* evaluates to #nil.
 
 ```lisp
-(nil? nil) -> true
-(nil? (tail '(1))) -> true
-(nil? (head '(1))) -> nil
+(nil? #nil) -> #true
+(nil? (tail '(1))) -> #true
+(nil? (head '(1))) -> #nil
 ```
 
 

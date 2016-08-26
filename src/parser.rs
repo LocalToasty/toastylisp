@@ -18,7 +18,7 @@ named!(expr<Rc<Expr> >,
                       define |
                       lambda |
                       list |
-                      number |
+                      literal |
                       symbol)));
 
 named!(quote<Rc<Expr> >,
@@ -107,19 +107,28 @@ named!(list<Rc<Expr> >,
                   list
               }));
 
+named!(literal<Rc<Expr> >,
+       alt!(map!(number, |n| Expr::new_number(n)) |
+            map!(boolean, |b| Expr::new_boolean(b)) |
+            map!(tag!("#nil"), |_| Expr::new_nil())));
+
 named!(positive_number<i32>,
        map_res!(map_res!(digit,
                          str::from_utf8),
                 FromStr::from_str));
 
-named!(number<Rc<Expr> >,
+named!(number<i32>,
        chain!(sign: opt!(alt!(char!('+') |
                               char!('-'))) ~
               abs: positive_number,
-              || Expr::new_number(match sign {
+              || match sign {
                   Some('-') => 0 - abs,
                   _ => abs
-              })));
+              }));
+
+named!(boolean<bool>,
+       alt!(map!(tag!("#true"), |_| true) |
+            map!(tag!("#false"), |_| false)));
 
 named!(symbol<Rc<Expr> >,
        map!(ident, Expr::new_symbol));
@@ -135,7 +144,7 @@ fn ident(input: &[u8]) -> IResult<&[u8], &str> {
 
     let first = input[0] as char;
     if first.is_whitespace() || first.is_numeric() || first == '(' || first == ')' ||
-       first == '\'' {
+       first == '\'' || first == '#' {
         return IResult::Error(Err::Code(ErrorKind::Custom(0x1010)));
     }
 

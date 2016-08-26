@@ -1,11 +1,12 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt;
+use std::iter;
 use environment::Environment;
 use builtin::BuiltinProc;
 
 /// Lisp expressions
-#[derive(PartialEq,Debug)]
+#[derive(PartialEq,Debug,Clone)]
 pub enum Expr {
     Symbol(String),
     Quote(Rc<Expr>),
@@ -13,12 +14,12 @@ pub enum Expr {
     If(Rc<Expr>, Rc<Expr>, Rc<Expr>),
     Cond(Vec<(Rc<Expr>, Rc<Expr>)>),
     Number(i32),
+    Boolean(bool),
     Builtin(BuiltinProc),
     Lambda(Vec<String>, Rc<Expr>, Option<Rc<RefCell<Environment>>>),
     Define(String, Rc<Expr>),
     Let(Vec<(String, Rc<Expr>)>, Rc<Expr>),
     Sequence(Vec<Rc<Expr>>),
-    True,
     Nil,
 }
 
@@ -85,12 +86,29 @@ impl Expr {
         Rc::new(Expr::Sequence(exprs))
     }
 
-    pub fn new_true() -> Rc<Expr> {
-        Rc::new(Expr::True)
+    pub fn new_boolean(val: bool) -> Rc<Expr> {
+        Rc::new(Expr::Boolean(val))
     }
 
     pub fn new_nil() -> Rc<Expr> {
         Rc::new(Expr::Nil)
+    }
+
+    pub fn get_type(&self) -> Type {
+        match *self {
+            Expr::Symbol(_) => Type::Symbol,
+            Expr::Quote(_) => Type::Quote,
+            Expr::Pair(..) => Type::Pair,
+            Expr::Number(_) => Type::Number,
+            Expr::Boolean(_) => Type::Boolean,
+            Expr::Lambda(..) => Type::Lambda,
+            Expr::Nil => Type::Nil,
+            _ => Type::Expr,
+        }
+    }
+
+    fn iter(&self) -> LispListIter {
+        LispListIter { list: Rc::new((*self).clone()) }
     }
 }
 
@@ -126,6 +144,7 @@ impl fmt::Display for Expr {
                 write!(f, ")")
             }
             Expr::Number(val) => write!(f, "{}", val),
+            Expr::Boolean(val) => write!(f, "#{}", val),
             Expr::Lambda(ref params, ref body, _) => {
                 try!(write!(f, "(lambda ("));
                 if !params.is_empty() {
@@ -153,8 +172,60 @@ impl fmt::Display for Expr {
                 }
                 write!(f, ")")
             }
-            Expr::True => write!(f, "true"),
-            Expr::Nil => write!(f, "nil"),
+            Expr::Nil => write!(f, "#nil"),
+        }
+    }
+}
+
+pub struct LispListIter {
+    list: Rc<Expr>,
+}
+
+impl iter::Iterator for LispListIter {
+    type Item = Result<Rc<Expr>, EvalErr>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match *self.list.clone() {
+            Expr::Pair(ref head, ref tail) => {
+                let tail = tail.clone();
+                self.list = tail;
+                Some(Ok(head.clone()))
+            }
+            Expr::Nil => None,
+            _ => {
+                Some(Err(EvalErr::TypeErr {
+                    expected: Type::Pair,
+                    found: self.list.get_type(),
+                }))
+            }
+        }
+    }
+}
+
+
+#[derive(PartialEq,Debug,Clone,Copy)]
+pub enum Type {
+    Symbol,
+    Quote,
+    Pair,
+    Number,
+    Boolean,
+    Lambda,
+    Nil,
+    Expr,
+}
+
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Type::Symbol => write!(f, "symbol"),
+            Type::Quote => write!(f, "quote"),
+            Type::Pair => write!(f, "pair"),
+            Type::Number => write!(f, "number"),
+            Type::Boolean => write!(f, "boolean"),
+            Type::Lambda => write!(f, "lambda"),
+            Type::Nil => write!(f, "nil"),
+            Type::Expr => write!(f, "expression"),
         }
     }
 }
@@ -162,8 +233,10 @@ impl fmt::Display for Expr {
 #[derive(Debug)]
 pub enum EvalErr {
     UndefinedSymbol(String),
-    TypeErr,
-    ArgListExpected,
+    TypeErr {
+        expected: Type,
+        found: Type,
+    },
     ProcExpected,
     TooManyArgs {
         expected: usize,
@@ -171,6 +244,23 @@ pub enum EvalErr {
     },
     Redefinition(String),
     NonExhaustivePattern,
+}
+
+impl fmt::Display for EvalErr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            EvalErr::UndefinedSymbol(ref symb) => write!(f, "Undefined symbol: {}", symb),
+            EvalErr::TypeErr { expected: ex, found: fo } => {
+                write!(f, "Type error: Expected {}, found {}", ex, fo)
+            }
+            EvalErr::ProcExpected => write!(f, "Expected procedure"),
+            EvalErr::TooManyArgs { expected: ex, found: fo } => {
+                write!(f, "Too many arguments: Expected {}, found {}", ex, fo)
+            }
+            EvalErr::Redefinition(ref symb) => write!(f, "Redefinition of symbol `{}'", symb),
+            EvalErr::NonExhaustivePattern => write!(f, "Non-exhaustive pattern"),
+        }
+    }
 }
 
 pub type EvalRes = Result<Rc<Expr>, EvalErr>;
@@ -278,7 +368,7 @@ fn eval_pair(head: &Rc<Expr>, tail: &Expr, env: &Rc<Environment>) -> PartialEval
     match *first {
         Expr::Lambda(ref params, _, _) => {
             // collect arguments and map them to the parameters
-            let args = match collect_list(tail) {
+            let args: Vec<_> = match tail.iter().collect() {
                 Ok(args) => args,
                 Err(err) => return PartialEvalRes::Err(err),
             };
@@ -305,8 +395,8 @@ fn eval_pair(head: &Rc<Expr>, tail: &Expr, env: &Rc<Environment>) -> PartialEval
         // number checking / currying
         Expr::Builtin(ref procedure) => {
             // collect arguments and map them to the parameters
-            match collect_list(tail) {
-                Ok(args) => PartialEvalRes::from_eval_res(procedure.apply(&args, env)),
+            match tail.iter().collect() {
+                Ok(args) => PartialEvalRes::from_eval_res(procedure.eval(&args, env)),
                 Err(err) => PartialEvalRes::Err(err),
             }
         }
@@ -343,26 +433,6 @@ fn apply_procedure(procedure: &Rc<Expr>, args: Vec<Rc<Expr>>) -> PartialEvalRes 
     }
 }
 
-/// Transforms a Lisp list into a vector.
-///
-/// # Errors
-///
-/// Returns an EvalErr::ArgListExpected, if list is not a list.
-fn collect_list(mut list: &Expr) -> Result<Vec<Rc<Expr>>, EvalErr> {
-    let mut res = Vec::new();
-
-    loop {
-        match *list {
-            Expr::Nil => return Ok(res),
-            Expr::Pair(ref head, ref tail) => {
-                res.push(head.clone());
-                list = tail;
-            }
-            _ => return Err(EvalErr::ArgListExpected),
-        }
-    }
-}
-
 /// Evaluates an if expression.
 ///
 /// If pred evaluates to something other than Expr::Nil, then the result of cons is returned.
@@ -374,10 +444,20 @@ fn eval_if(pred: &Rc<Expr>,
            -> PartialEvalRes {
     match eval(pred, env) {
         Ok(expr) => {
-            if *expr != Expr::Nil {
-                eval_partially(cons, env)
-            } else {
-                eval_partially(alt, env)
+            match *expr {
+                Expr::Boolean(val) => {
+                    if val {
+                        eval_partially(cons, env)
+                    } else {
+                        eval_partially(alt, env)
+                    }
+                }
+                _ => {
+                    PartialEvalRes::Err(EvalErr::TypeErr {
+                        expected: Type::Boolean,
+                        found: expr.get_type(),
+                    })
+                }
             }
         }
         Err(err) => PartialEvalRes::Err(err),
@@ -396,8 +476,18 @@ fn eval_cond(cases: &Vec<(Rc<Expr>, Rc<Expr>)>, env: &Rc<Environment>) -> Partia
 
         match eval(pred, env) {
             Ok(expr) => {
-                if *expr != Expr::Nil {
-                    return eval_partially(&cons, env);
+                match *expr {
+                    Expr::Boolean(val) => {
+                        if val {
+                            return eval_partially(cons, env);
+                        }
+                    }
+                    _ => {
+                        return PartialEvalRes::Err(EvalErr::TypeErr {
+                            expected: Type::Boolean,
+                            found: expr.get_type(),
+                        })
+                    }
                 }
             }
             Err(err) => return PartialEvalRes::Err(err),
@@ -510,7 +600,7 @@ mod tests {
 
         // predicate not nil
         assert_eq!(res,
-                   eval(&Expr::new_if(Expr::new_number(0),
+                   eval(&Expr::new_if(Expr::new_boolean(true),
                                       Expr::new_quote(res.clone()),
                                       Expr::new_nil()),
                         &env)
@@ -518,7 +608,7 @@ mod tests {
 
         // predicate nil
         assert_eq!(res,
-                   eval(&Expr::new_if(Expr::new_nil(),
+                   eval(&Expr::new_if(Expr::new_boolean(false),
                                       Expr::new_nil(),
                                       Expr::new_quote(res.clone())),
                         &env)
@@ -531,7 +621,7 @@ mod tests {
         let x = Expr::new_number(5);
         let y = Expr::new_number(5);
 
-        assert_eq!(Expr::True,
+        assert_eq!(Expr::Boolean(true),
                    *eval(&Expr::new_list(vec![Expr::new_builtin(BuiltinProc::Eq), x, y]),
                          &env)
                         .unwrap());
