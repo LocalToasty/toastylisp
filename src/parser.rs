@@ -159,6 +159,25 @@ fn ident(input: &[u8]) -> IResult<&[u8], &str> {
     return IResult::Done(&input[len..], str::from_utf8(&input[0..len]).unwrap());
 }
 
+/// Removes all comments from a string.
+pub fn remove_comments(input: &str) -> Vec<u8> {
+    let mut res = Vec::new();
+
+    for line in input.lines() {
+        for b in line.bytes() {
+            if b == ';' as u8 {
+                break;
+            }
+
+            res.push(b);
+        }
+        res.push('\n' as u8);
+    }
+
+    res.pop(); // remove last newline
+    res
+}
+
 #[cfg(test)]
 mod tests {
     use std::rc::Rc;

@@ -2,6 +2,7 @@
 
 ## Table of Contents ##
 
+- [Comments](#comments)
 - [Data Types](#data-types)
   - [Numbers](#numbers)
   - [Booleans](#booleans)
@@ -22,6 +23,19 @@
   - [List Operations](#list-operations)
   - [Predicates](#predicates)
   - [Miscellaneous](#miscellaneous)
+
+
+## Comments ##
+
+Comments are are parts of the source code which are ignored by the interpreter.
+They are commonly used to explain parts of the code.
+The begin of a comment is indicated by a `;`.
+Whenever the interpreter encouters a `;`, it ignores everything until the end of the line.
+
+```lisp
+(define meaning-of-life 42)  ; the answer to life, the universe and everything
+(+ meaning-of-life 1295)
+```
 
 
 ## Data Types ##
