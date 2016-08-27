@@ -35,6 +35,8 @@ pub enum BuiltinProc {
     Head,
     /// Get second element of pair
     Tail,
+    /// Evaluate a quoted expression.
+    Eval,
     /// Check if expression evaluates to a defined symbol.
     IsDefined,
     /// Check if expression evaluates to a number.
@@ -71,6 +73,7 @@ impl BuiltinProc {
             BuiltinProc::Not |
             BuiltinProc::Head |
             BuiltinProc::Tail |
+            BuiltinProc::Eval |
             BuiltinProc::IsDefined |
             BuiltinProc::IsNumber |
             BuiltinProc::IsBoolean |
@@ -115,6 +118,10 @@ impl BuiltinProc {
             }
             BuiltinProc::Cons => BuiltinProc::eval_cons(args, env),
             BuiltinProc::Head | BuiltinProc::Tail => self.eval_head_tail(args, env),
+            BuiltinProc::Eval => {
+                let expr = try!(eval(&args[0], env));
+                eval(&expr, env)
+            }
             BuiltinProc::IsDefined => {
                 if let Expr::Symbol(ref name) = *args[0] {
                     if env.borrow().is_defined(name) {
@@ -309,6 +316,7 @@ impl fmt::Display for BuiltinProc {
             BuiltinProc::Cons => write!(f, "builtin.cons"),
             BuiltinProc::Head => write!(f, "builtin.head"),
             BuiltinProc::Tail => write!(f, "builtin.tail"),
+            BuiltinProc::Eval => write!(f, "builtin.eval"),
             BuiltinProc::IsDefined => write!(f, "builtin.defined?"),
             BuiltinProc::IsQuote => write!(f, "builtin.quote?"),
             BuiltinProc::IsNumber => write!(f, "builtin.number?"),

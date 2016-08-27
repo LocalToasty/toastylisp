@@ -21,6 +21,7 @@
   - [Logical Junctors](#logical-junctors)
   - [List Operations](#list-operations)
   - [Predicates](#predicates)
+  - [Miscellaneous](#miscellaneous)
 
 
 ## Data Types ##
@@ -388,6 +389,7 @@ If the list only has one element, the tail is the empty list, i.e. #nil.
 (tail '(1)) -> #nil
 ```
 
+
 ### Predicates ###
 
 #### defined? ####
@@ -497,4 +499,17 @@ Prints the result of *expr*.
 (print! (* 7 8))       ; prints 56
 (print! '(hello world) ; prints (hello world)
 (print! (+ 2))         ; prints (lambda (x1) (intrinsic.+ 2 x1))
+```
+
+
+### Miscellaneous ###
+
+#### eval ####
+
+(**eval** *quote*)
+
+Evaluates a quoted expression.
+
+```lisp
+(eval '(+ 2 3)) -> 5
 ```

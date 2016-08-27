@@ -94,6 +94,12 @@ mod tests {
     }
 
     #[test]
+    fn eval() {
+        let prog = "(eval '(+ 1 (* 2 3)))";
+        assert_eq!(*parse_and_eval(prog.as_bytes()), Expr::Number(7));
+    }
+
+    #[test]
     fn currying() {
 // single curry
         let prog = "(((lambda (x y) y) 1) 2)";

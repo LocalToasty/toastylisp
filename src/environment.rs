@@ -33,6 +33,7 @@ impl Environment {
         env.insert(String::from("cons"), Expr::new_builtin(BuiltinProc::Cons));
         env.insert(String::from("head"), Expr::new_builtin(BuiltinProc::Head));
         env.insert(String::from("tail"), Expr::new_builtin(BuiltinProc::Tail));
+        env.insert(String::from("eval"), Expr::new_builtin(BuiltinProc::Eval));
         env.insert(String::from("defined?"),
                    Expr::new_builtin(BuiltinProc::IsDefined));
         env.insert(String::from("number?"),
