@@ -283,13 +283,43 @@ impl PartialEvalRes {
     }
 }
 
+static mut verbose: Option<usize> = None;
+
+pub fn set_verbose(enabled: bool) {
+    if enabled {
+        unsafe {
+            verbose = Some(0);
+        }
+    } else {
+        unsafe {
+            verbose = None;
+        }
+    }
+}
+
 pub fn eval(expr: &Rc<Expr>, env: &Rc<RefCell<Environment>>) -> EvalRes {
+    unsafe {
+        if let Some(indent) = verbose {
+            verbose = Some(indent + 1);
+        }
+    }
     let mut res = eval_partially(expr, env);
 
     loop {
         match res {
             PartialEvalRes::TailCall(procedure, args) => res = apply_procedure(&procedure, args),
-            PartialEvalRes::Done(expr) => return Ok(expr),
+            PartialEvalRes::Done(expr) => {
+                unsafe {
+                    if let Some(indent) = verbose {
+                        verbose = Some(indent - 1);
+                        for _ in 0..indent - 1 {
+                            print!("   |");
+                        }
+                        println!("   +-> {}", expr);
+                    }
+                }
+                return Ok(expr);
+            }
             PartialEvalRes::Err(err) => return Err(err),
         }
     }
@@ -301,6 +331,14 @@ pub fn eval(expr: &Rc<Expr>, env: &Rc<RefCell<Environment>>) -> EvalRes {
 ///
 /// Returns an error if the expression is semantically incorrect.
 fn eval_partially(expr: &Rc<Expr>, env: &Rc<RefCell<Environment>>) -> PartialEvalRes {
+    unsafe {
+        if let Some(indent) = verbose {
+            for _ in 0..indent - 1 {
+                print!("   |");
+            }
+            println!("   {}", expr);
+        }
+    }
     let res = match **expr {
         Expr::Symbol(ref symbol) => {
             // If a symbol is read, return its value.
@@ -533,14 +571,28 @@ fn eval_let(defs: &Vec<(String, Rc<Expr>)>,
 ///
 /// Returns EvalErr::Redefinition if a symbol is defined twice.
 fn eval_sequence(exprs: &Vec<Rc<Expr>>, env: Rc<RefCell<Environment>>) -> PartialEvalRes {
+    unsafe {
+        if let Some(indent) = verbose {
+            verbose = Some(indent + 1);
+        }
+    }
     let seq_env = Environment::new_scope(env);
     let (last, inits) = exprs.split_last().unwrap();
     for expr in inits {
         match **expr {
-            Expr::Define(ref name, ref expr) => {
+            Expr::Define(ref name, ref body) => {
+                unsafe {
+                    if let Some(indent) = verbose {
+                        for _ in 0..indent - 1 {
+                            print!("   |");
+                        }
+                        println!("   {}", expr);
+                    }
+                }
+
                 let already_defined = !seq_env.borrow().locally_defined(name);
                 if already_defined {
-                    match eval(expr, &seq_env) {
+                    match eval(body, &seq_env) {
                         Ok(res) => seq_env.borrow_mut().insert(name.clone(), res.clone()),
                         Err(err) => return PartialEvalRes::Err(err),
                     }
@@ -556,6 +608,11 @@ fn eval_sequence(exprs: &Vec<Rc<Expr>>, env: Rc<RefCell<Environment>>) -> Partia
         }
     }
 
+    unsafe {
+        if let Some(indent) = verbose {
+            verbose = Some(indent - 1);
+        }
+    }
     match **last {
         Expr::Pair(..) => eval_partially(last, &seq_env),
         _ => PartialEvalRes::from_eval_res(eval(last, &seq_env)),

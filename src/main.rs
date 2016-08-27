@@ -18,10 +18,14 @@ fn main() {
     let mut args = env::args();
     args.next();
     for arg in args {
-        let mut f = File::open(arg).unwrap();
-        let mut buffer = String::new();
-        let _ = f.read_to_string(&mut buffer);
-        parse_and_eval(buffer.trim());
+        if arg == "-v" || arg == "--verbose" {
+            expression::set_verbose(true);
+        } else {
+            let mut f = File::open(arg).unwrap();
+            let mut buffer = String::new();
+            let _ = f.read_to_string(&mut buffer);
+            parse_and_eval(buffer.trim());
+        }
     }
 }
 
