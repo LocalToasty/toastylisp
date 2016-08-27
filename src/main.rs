@@ -44,6 +44,14 @@ mod tests {
                             1) ; define x as 1 \n\
                     x";
         assert_eq!(*parse_and_eval(prog), Expr::Number(1));
+
+        let prog = "(define x ;hello world \n\
+                            1) ; define x as 1 \n\
+                    x \n\
+                    ; some trailing comments \n\
+
+                    ; which should generate some trailing whitespace";
+        assert_eq!(*parse_and_eval(prog), Expr::Number(1));
     }
 
     #[test]
