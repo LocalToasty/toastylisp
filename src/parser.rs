@@ -171,10 +171,16 @@ pub fn remove_comments(input: &str) -> Vec<u8> {
 
             res.push(b);
         }
-        res.push('\n' as u8);
     }
 
-    res.pop(); // remove last newline
+    // remove trailing whitespace
+    while let Some(c) = res.pop() {
+        let c = c as char;
+        if !(c == '\n' || c == '\r' || c == '\t' || c == ' ') {
+            res.push(c as u8);
+            break;
+        }
+    }
     res
 }
 
