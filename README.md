@@ -1,6 +1,64 @@
 [![Build Status](https://travis-ci.org/LocalToasty/lisp.svg?branch=develop)](https://travis-ci.org/LocalToasty/lisp)
 
-## Special Forms ##
+## Table of Contents ##
+
+- [Data Types](#data-types)
+  - [Numbers](#numbers)
+  - [Booleans](#booleans)
+  - [Lambdas](#lambdas)
+  - [Pairs](#pairs)
+  - [Nil](#nil)
+- [Syntactic Forms](#syntactic-forms)
+  - [Quote](#quote)
+  - [if](#if)
+  - [cond](#cond)
+  - [let](#let)
+  - [define](#define)
+  - [lambda](#lambda)
+- [Built in Procedures](#built-in-procedures)
+  - [Arithmetic Operations](#arithmetic-operations)
+  - [Relations](#relations)
+  - [Logical Junctors](#logical-junctors)
+  - [List Operations](#list-operations)
+  - [Predicates](#predicates)
+
+
+## Data Types ##
+
+### Numbers ###
+
+A lisp number is a 32 bit signed integer.
+A number literal consists of an optional sign `+` or `-` followed by a digit which is not 0 zero or more digits.
+
+
+### Booleans ###
+
+A boolean is a truth value; it can be either true or false.
+Boolean values are represented by the `#true` and `#false` literals in lisp.
+
+
+### Lambdas ###
+
+A Lambda is an anonymous function object.
+It can be created using the lambda for.
+
+
+### Pairs ###
+
+A Pair is a compound data type which holds two other values.
+The first element of a pair is called its head, the other its tail.
+Lisp lists are represented as nested pairs:
+The first element of the pair points to its first value, the second to a list containing the remainder of the list.
+The empty list is represented by `#nil`.
+
+
+### Nil ###
+
+The nil value represents nothing.
+It can be created using the `#nil` literal.
+
+
+## Syntactic Forms ##
 
 ### Quote ###
 
@@ -152,7 +210,11 @@ Now `double` is bound to `(lambda (x) (* 2 x))`, a procedure which only takes on
 
 ## Built in Procedures ##
 
-### + ###
+### Arithmetic Operations ###
+
+#### + ####
+
+(**+** *number_1* *number_2*)
 
 Adds two numbers.
 
@@ -161,7 +223,9 @@ Adds two numbers.
 ```
 
 
-### - ###
+#### - ####
+
+(**-** *number_1* *number_2*)
 
 Subtracts two numbers.
 
@@ -170,7 +234,9 @@ Subtracts two numbers.
 ```
 
 
-### * ###
+#### * ####
+
+(**&#42;** *number_1* *number_2*)
 
 Multiplies two numbers.
 
@@ -179,7 +245,9 @@ Multiplies two numbers.
 ```
 
 
-### / ###
+#### / ####
+
+(**/** *number_1* *number_2*)
 
 Performs an integer division between two numbers.
 If the first argument is not evenly divisible by the second, the result is rounded towards zero.
@@ -190,7 +258,9 @@ If the first argument is not evenly divisible by the second, the result is round
 ```
 
 
-### mod ###
+#### mod ####
+
+(**mod** *number_1* *number_2*)
 
 Calculates the remainder of a division.
 
@@ -198,72 +268,92 @@ Calculates the remainder of a division.
 (mod 5 2) -> 1
 ```
 
+### Relations ###
 
-### = ###
+#### = ####
+
+(**=** *expr_1* *expr_2*)
 
 Checks if two values are equal.
 
 ```lisp
 (= 3 3) -> #true
-(= 3 5) -> #nil
+(= 3 5) -> #false
 (= 'foo 'foo) -> #true
 (= '(1 2 3) '(1 2 3)) -> #true
 ```
 
 
-### < ###
+#### < ####
+
+(**<** *number_1* *number_2*)
 
 Returns #true if and only if the first argument is less than the second.
 
 ```lisp
 (< 1 2) -> #true
-(< 2 1) -> #nil
+(< 2 1) -> #false
 ```
 
 
-### > ###
+#### > ####
 
-Returns #true if and only if the first argument is greater than the second.
+(**>** *number_1* *number_2*)
+
+Returns `#true` if first argument is greater than the second, and `#false` otherwise.
 
 ```lisp
-(> 1 2) -> #nil
+(> 1 2) -> #false
 (> 2 1) -> #true
 ```
 
 
-### and ###
+### Logical Junctors ###
 
-Returns #true if and only if both arguments are not #nil.
+#### and ####
+
+(**and** *boolean_1* *boolean_2*)
+
+Returns `#true` if and only if both arguments are `#true`.
 
 ```lisp
 (and (> 5 3) (< 2 5)) -> #true
 (and (< 5 3) (< 2 5)) -> #false
 (and (< 5 3) (> 2 5)) -> #false
+(and 1 0) -> Type error: expected 'boolean', found 'number'
 ```
 
 
-### or ###
+#### or ####
 
-Returns #true if at least one of the arguments is not #nil.
+(**or** *boolean_1* *boolean_2*)
+
+Returns `#true` if at least one of the arguments is `#true`.
 
 ```lisp
 (or (> 5 3) (< 2 5)) -> #true
 (or (< 5 3) (< 2 5)) -> #true
 (or (< 5 3) (> 2 5)) -> #false
+(or 1 0) -> Type error: expected 'boolean', found 'number'
 ```
 
 
-### not ###
+#### not ####
 
-Returns #true if the argument is #nil, #nil otherwise.
+(**not** *boolean*)
+
+Returns `#true` if the argument is `#false`, `#false` otherwise.
 
 ```lisp
 (not (< 5 3)) -> #true
-(not (> 5 3)) -> #nil
+(not (> 5 3)) -> #false
 ```
 
+### List Operations ###
 
-### cons ###
+#### cons ####
+
+(**cons** *expr_1* *expr_2*)
 
 Constructs a new pair.
 Lists are represented as nested pairs, with the first element of the pair being the head of the list, and the second containing the tail (i.e. the remainder of the list).
@@ -274,7 +364,7 @@ Lists are represented as nested pairs, with the first element of the pair being 
 ```
 
 
-### head ###
+#### head ####
 
 Retrieves the first element of a pair.
 If the argument is a list, its first element is returned.
@@ -286,7 +376,7 @@ If the argument is a list, its first element is returned.
 ```
 
 
-### tail ###
+#### tail ####
 
 Retrieves the second element of a pair.
 If the argument is a list, the lists tail (i.e. all but the first element) is returned.
@@ -298,10 +388,11 @@ If the list only has one element, the tail is the empty list, i.e. #nil.
 (tail '(1)) -> #nil
 ```
 
+### Predicates ###
 
-### defined? ###
+#### defined? ####
 
-(**defined** *symbol*)
+(**defined?** *symbol*)
 
 Checks if *symbol* is defined.
 
@@ -313,7 +404,7 @@ Checks if *symbol* is defined.
 ```
 
 
-### number? ###
+#### number? ####
 
 (**number?** *expr*)
 
@@ -327,8 +418,23 @@ Checks if *expr* evaluates to a number.
 (number? '(1)) -> #false
 ```
 
+#### boolean? ####
 
-### quote? ###
+(**boolean?** *expr*)
+
+Checks if *expr* evaluates to a boolean.
+
+```lisp
+(boolean? #true) -> #true
+(boolean? #false) -> #true
+(define x #false)
+(boolean? x) -> #true
+(boolean? (not #false)) -> #true
+(boolean? 1) -> #false
+(boolean? 0) -> #false
+```
+
+#### quote? ####
 
 (**quote?** *expr*)
 
@@ -340,7 +446,7 @@ Checks if *expr* evaluates to a quote.
 ```
 
 
-### lambda? ###
+#### lambda? ####
 
 (**lambda?** *expr*)
 
@@ -350,11 +456,11 @@ Checks if *expr* evaluates to a lambda.
 (lambda? (lambda (x) (* x x))) -> #true
 (lambda? +) -> #true
 (lambda? (+ 2)) -> #true
-(lambda? (+ 2 3)) -> #nil
+(lambda? (+ 2 3)) -> #false
 ```
 
 
-### pair? ###
+#### pair? ####
 
 (**pair?** *expr*)
 
@@ -363,11 +469,11 @@ Checks if *expr* evaluates to a pair.
 ```lisp
 (pair? (cons 1 2)) -> #true
 (pair? '(1 2 3)) -> #true
-(pair? 42) -> #nil
+(pair? 42) -> #false
 ```
 
 
-### nil? ###
+#### nil? ####
 
 (**nil?** *expr*)
 
@@ -376,11 +482,11 @@ Checks if *expr* evaluates to #nil.
 ```lisp
 (nil? #nil) -> #true
 (nil? (tail '(1))) -> #true
-(nil? (head '(1))) -> #nil
+(nil? (head '(1))) -> #false
 ```
 
 
-### print! ###
+#### print! ####
 
 (**print!** *expr*)
 
