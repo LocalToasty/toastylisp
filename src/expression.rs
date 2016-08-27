@@ -257,7 +257,7 @@ impl fmt::Display for EvalErr {
             EvalErr::TooManyArgs { expected: ex, found: fo } => {
                 write!(f, "Too many arguments: Expected {}, found {}", ex, fo)
             }
-            EvalErr::Redefinition(ref symb) => write!(f, "Redefinition of symbol `{}'", symb),
+            EvalErr::Redefinition(ref symb) => write!(f, "Redefinition of symbol '{}'", symb),
             EvalErr::NonExhaustivePattern => write!(f, "Non-exhaustive pattern"),
         }
     }
@@ -283,7 +283,7 @@ impl PartialEvalRes {
     }
 }
 
-pub fn eval(expr: &Rc<Expr>, env: &Rc<Environment>) -> EvalRes {
+pub fn eval(expr: &Rc<Expr>, env: &Rc<RefCell<Environment>>) -> EvalRes {
     let mut res = eval_partially(expr, env);
 
     loop {
@@ -300,13 +300,13 @@ pub fn eval(expr: &Rc<Expr>, env: &Rc<Environment>) -> EvalRes {
 /// # Errors
 ///
 /// Returns an error if the expression is semantically incorrect.
-fn eval_partially(expr: &Rc<Expr>, env: &Rc<Environment>) -> PartialEvalRes {
+fn eval_partially(expr: &Rc<Expr>, env: &Rc<RefCell<Environment>>) -> PartialEvalRes {
     let res = match **expr {
         Expr::Symbol(ref symbol) => {
             // If a symbol is read, return its value.
             // In case of its a lambda, it has to be evaluated again in order to potentially bind
             // its environment.
-            match env.get(symbol) {
+            match env.borrow().get(symbol) {
                 Some(expr) => {
                     match *expr {
                         Expr::Lambda(..) => eval_partially(&expr, env),
@@ -326,10 +326,7 @@ fn eval_partially(expr: &Rc<Expr>, env: &Rc<Environment>) -> PartialEvalRes {
             // If the lambda is not bound to an environment yet, bind it to the current environment.
             // This way variables from this environment are captured.
             let res = match *lambda_env {
-                None => {
-                    let wrapped_env = Rc::new(RefCell::new((**env).clone()));
-                    Expr::new_lambda(params.clone(), body.clone(), Some(wrapped_env))
-                }
+                None => Expr::new_lambda(params.clone(), body.clone(), Some(env.clone())),
                 _ => expr.clone(),
 
             };
@@ -359,7 +356,7 @@ fn eval_partially(expr: &Rc<Expr>, env: &Rc<Environment>) -> PartialEvalRes {
 /// Returns EvalErr::ProcExpected, if the first element of the list isn't a procedure (i.e. either a
 /// lambda or an intrinsic procedure).  If the tail of the pair does not resemble a list,
 /// EvalErr::ArgListExpected is returned.
-fn eval_pair(head: &Rc<Expr>, tail: &Expr, env: &Rc<Environment>) -> PartialEvalRes {
+fn eval_pair(head: &Rc<Expr>, tail: &Expr, env: &Rc<RefCell<Environment>>) -> PartialEvalRes {
     let first = match eval(head, env) {
         Ok(expr) => expr,
         Err(err) => return PartialEvalRes::Err(err),
@@ -411,25 +408,25 @@ fn apply_procedure(procedure: &Rc<Expr>, args: Vec<Rc<Expr>>) -> PartialEvalRes 
     };
 
     // add arguments to environment
-    let unwrapped_lambda_env = (*lambda_env.clone().unwrap()).clone().into_inner();
-    let mut lambda_scope = Environment::new_scope(Rc::new(unwrapped_lambda_env));
+    let lambda_scope = Environment::new_scope(lambda_env.clone().unwrap());
+    {
+        let mut borrowed_lambda_scope = lambda_scope.borrow_mut();
 
-    let defs = params.iter()
-                     .zip(args.iter())
-                     .map(|(param, arg)| (param.clone(), arg.clone()));
-    for (param, arg) in defs {
-        lambda_scope.insert(param, arg);
+        let defs = params.iter()
+                         .zip(args.iter())
+                         .map(|(param, arg)| (param.clone(), arg.clone()));
+        for (param, arg) in defs {
+            borrowed_lambda_scope.insert(param, arg);
+        }
     }
 
     if args.len() == params.len() {
         // correct amount of arguments, evaluate body
-        eval_partially(&body, &Rc::new(lambda_scope))
+        eval_partially(&body, &lambda_scope)
     } else {
         // too few arguments were given; return curried lambda
         let remaining_params = params[args.len()..].to_vec();
-        PartialEvalRes::Done(Expr::new_lambda(remaining_params,
-                                              body.clone(),
-                                              Some(Rc::new(RefCell::new(lambda_scope)))))
+        PartialEvalRes::Done(Expr::new_lambda(remaining_params, body.clone(), Some(lambda_scope)))
     }
 }
 
@@ -440,7 +437,7 @@ fn apply_procedure(procedure: &Rc<Expr>, args: Vec<Rc<Expr>>) -> PartialEvalRes 
 fn eval_if(pred: &Rc<Expr>,
            cons: &Rc<Expr>,
            alt: &Rc<Expr>,
-           env: &Rc<Environment>)
+           env: &Rc<RefCell<Environment>>)
            -> PartialEvalRes {
     match eval(pred, env) {
         Ok(expr) => {
@@ -470,7 +467,7 @@ fn eval_if(pred: &Rc<Expr>,
 ///
 /// If none of the predicates evaluate to a value different from nil, EvalErr::NonExhaustivePattern
 /// is returned.
-fn eval_cond(cases: &Vec<(Rc<Expr>, Rc<Expr>)>, env: &Rc<Environment>) -> PartialEvalRes {
+fn eval_cond(cases: &Vec<(Rc<Expr>, Rc<Expr>)>, env: &Rc<RefCell<Environment>>) -> PartialEvalRes {
     for case in cases {
         let (ref pred, ref cons) = *case;
 
@@ -504,24 +501,19 @@ fn eval_cond(cases: &Vec<(Rc<Expr>, Rc<Expr>)>, env: &Rc<Environment>) -> Partia
 /// Returns EvalErr::Redefinition if a symbol is defined twice.
 fn eval_let(defs: &Vec<(String, Rc<Expr>)>,
             body: &Rc<Expr>,
-            env: Rc<Environment>)
+            env: Rc<RefCell<Environment>>)
             -> PartialEvalRes {
-    let mut let_env = Environment::new_scope(env);
+    let let_env = Environment::new_scope(env);
 
     // Add definitions to environment
     for def in defs {
         let (ref name, ref expr) = *def;
 
         // check if the symbol wasn't defined in this scope before
-        if !let_env.locally_defined(&name) {
-            match eval(&expr, &Rc::new(let_env.clone())) {
-                Ok(res) => {
-                    if let Expr::Lambda(_, _, ref env) = *res {
-                        // capture lambda args
-                        env.as_ref().unwrap().borrow_mut().insert(name.clone(), res.clone());
-                    }
-                    let_env.insert(name.clone(), res.clone());
-                }
+        let already_defined = !let_env.borrow().locally_defined(name);
+        if already_defined {
+            match eval(&expr, &let_env) {
+                Ok(res) => let_env.borrow_mut().insert(name.clone(), res.clone()),
                 Err(err) => return PartialEvalRes::Err(err),
             }
         } else {
@@ -530,8 +522,8 @@ fn eval_let(defs: &Vec<(String, Rc<Expr>)>,
     }
 
     match **body {
-        Expr::Pair(..) => eval_partially(body, &Rc::new(let_env)),
-        _ => PartialEvalRes::from_eval_res(eval(body, &Rc::new(let_env))),
+        Expr::Pair(..) => eval_partially(body, &let_env),
+        _ => PartialEvalRes::from_eval_res(eval(body, &let_env)),
     }
 }
 
@@ -540,23 +532,16 @@ fn eval_let(defs: &Vec<(String, Rc<Expr>)>,
 /// # Errors
 ///
 /// Returns EvalErr::Redefinition if a symbol is defined twice.
-fn eval_sequence(exprs: &Vec<Rc<Expr>>, env: Rc<Environment>) -> PartialEvalRes {
-    let mut seq_env = Environment::new_scope(env);
+fn eval_sequence(exprs: &Vec<Rc<Expr>>, env: Rc<RefCell<Environment>>) -> PartialEvalRes {
+    let seq_env = Environment::new_scope(env);
     let (last, inits) = exprs.split_last().unwrap();
     for expr in inits {
         match **expr {
             Expr::Define(ref name, ref expr) => {
-                if !seq_env.locally_defined(name) {
-                    match eval(expr, &Rc::new(seq_env.clone())) {
-                        Ok(res) => {
-                            if let Expr::Lambda(_, _, ref env) = *res {
-                                env.as_ref()
-                                   .unwrap()
-                                   .borrow_mut()
-                                   .insert(name.clone(), res.clone());
-                            }
-                            seq_env.insert(name.clone(), res.clone());
-                        }
+                let already_defined = !seq_env.borrow().locally_defined(name);
+                if already_defined {
+                    match eval(expr, &seq_env) {
+                        Ok(res) => seq_env.borrow_mut().insert(name.clone(), res.clone()),
                         Err(err) => return PartialEvalRes::Err(err),
                     }
                 } else {
@@ -564,7 +549,7 @@ fn eval_sequence(exprs: &Vec<Rc<Expr>>, env: Rc<Environment>) -> PartialEvalRes 
                 }
             }
             _ => {
-                if let Err(err) = eval(expr, &Rc::new(seq_env.clone())) {
+                if let Err(err) = eval(expr, &seq_env) {
                     return PartialEvalRes::Err(err);
                 }
             }
@@ -572,14 +557,15 @@ fn eval_sequence(exprs: &Vec<Rc<Expr>>, env: Rc<Environment>) -> PartialEvalRes 
     }
 
     match **last {
-        Expr::Pair(..) => eval_partially(last, &Rc::new(seq_env)),
-        _ => PartialEvalRes::from_eval_res(eval(last, &Rc::new(seq_env))),
+        Expr::Pair(..) => eval_partially(last, &seq_env),
+        _ => PartialEvalRes::from_eval_res(eval(last, &seq_env)),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use std::rc::Rc;
+    use std::cell::RefCell;
     use environment::Environment;
     use builtin::BuiltinProc;
     use super::*;
@@ -587,7 +573,7 @@ mod tests {
     /// Checks if self-evaluating expressions evaluate to themselves.
     #[test]
     fn eval_self_evaluating() {
-        let env = Rc::new(Environment::new());
+        let env = Rc::new(RefCell::new(Environment::new()));
 
         let number = Expr::new_number(5);
         assert_eq!(number, eval(&number, &env).unwrap());
@@ -595,7 +581,7 @@ mod tests {
 
     #[test]
     fn eval_if() {
-        let env = Rc::new(Environment::new());
+        let env = Rc::new(RefCell::new(Environment::new()));
         let res = Expr::new_symbol("expected");
 
         // predicate not nil
@@ -617,7 +603,7 @@ mod tests {
 
     #[test]
     fn eval_eq() {
-        let env = Rc::new(Environment::new());
+        let env = Rc::new(RefCell::new(Environment::new()));
         let x = Expr::new_number(5);
         let y = Expr::new_number(5);
 

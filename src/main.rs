@@ -2,6 +2,7 @@
 extern crate nom;
 
 use std::rc::Rc;
+use std::cell::RefCell;
 use expression::{Expr, eval};
 use environment::Environment;
 use std::io::prelude::*;
@@ -27,7 +28,7 @@ fn main() {
 fn parse_and_eval(input: &[u8]) -> Rc<Expr> {
     let prog = parser::parse_root(input).unwrap().1;
     let env = Environment::new();
-    eval(&prog, &Rc::new(env)).unwrap()
+    eval(&prog, &Rc::new(RefCell::new(env))).unwrap()
 }
 
 #[cfg(test)]
@@ -101,6 +102,21 @@ mod tests {
 // double curry
         let prog = "(((lambda (x y z) z) 1) 2) 3)";
         assert_eq!(*parse_and_eval(prog.as_bytes()), Expr::Number(3));
+    }
+
+    #[test]
+    fn postponed_definition() {
+// define the value of bar after the one of foo
+        let prog = "(define foo (lambda () bar)) \
+                    (define bar 1337) \
+                    (foo)";
+        assert_eq!(*parse_and_eval(prog.as_bytes()), Expr::Number(1337));
+
+// same for let
+        let prog = "(let ((foo (lambda () bar)) \
+                          (bar 1337)) \
+                      (foo))";
+        assert_eq!(*parse_and_eval(prog.as_bytes()), Expr::Number(1337));
     }
 
     #[test]

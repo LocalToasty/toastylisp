@@ -1,11 +1,12 @@
 use std::rc::Rc;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use expression::Expr;
 use builtin::BuiltinProc;
 
 #[derive(Clone,PartialEq,Debug)]
 pub struct Environment {
-    parent: Option<Rc<Environment>>,
+    parent: Option<Rc<RefCell<Environment>>>,
     local: HashMap<String, Rc<Expr>>,
 }
 
@@ -51,31 +52,26 @@ impl Environment {
         env
     }
 
-    pub fn new_scope(parent: Rc<Environment>) -> Environment {
-        Environment {
+    pub fn new_scope(parent: Rc<RefCell<Environment>>) -> Rc<RefCell<Environment>> {
+        Rc::new(RefCell::new(Environment {
             parent: Some(parent),
             local: HashMap::new(),
-        }
+        }))
     }
 
     pub fn get(&self, symbol: &String) -> Option<Rc<Expr>> {
         if let Some(val) = self.local.get(symbol) {
             Some(val.clone())
         } else if let Some(ref parent) = self.parent {
-            parent.get(symbol)
+            parent.borrow().get(symbol)
         } else {
             None
         }
     }
 
     pub fn is_defined(&self, symbol: &String) -> bool {
-        if self.local.contains_key(symbol) {
-            true
-        } else if let Some(ref parent) = self.parent {
-            parent.is_defined(symbol)
-        } else {
-            false
-        }
+        self.local.contains_key(symbol) ||
+        self.parent.as_ref().map_or(false, |p| p.borrow().is_defined(symbol))
     }
 
     pub fn locally_defined(&self, symbol: &String) -> bool {

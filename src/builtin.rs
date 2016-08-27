@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::cell::RefCell;
 use std::fmt;
 use expression::{Expr, Type, eval, EvalRes, EvalErr};
 use environment::Environment;
@@ -90,7 +91,7 @@ impl BuiltinProc {
     /// # Panics
     ///
     /// The function panics if too few arguments are supplied.
-    pub fn eval(&self, args: &Vec<Rc<Expr>>, env: &Rc<Environment>) -> EvalRes {
+    pub fn eval(&self, args: &Vec<Rc<Expr>>, env: &Rc<RefCell<Environment>>) -> EvalRes {
         match *self {
             BuiltinProc::Add |
             BuiltinProc::Sub |
@@ -116,7 +117,7 @@ impl BuiltinProc {
             BuiltinProc::Head | BuiltinProc::Tail => self.eval_head_tail(args, env),
             BuiltinProc::IsDefined => {
                 if let Expr::Symbol(ref name) = *args[0] {
-                    if env.is_defined(name) {
+                    if env.borrow().is_defined(name) {
                         Ok(Expr::new_boolean(true))
                     } else {
                         Ok(Expr::new_boolean(false))
@@ -168,7 +169,7 @@ impl BuiltinProc {
         }
     }
 
-    fn eval_numeric(&self, args: &Vec<Rc<Expr>>, env: &Rc<Environment>) -> EvalRes {
+    fn eval_numeric(&self, args: &Vec<Rc<Expr>>, env: &Rc<RefCell<Environment>>) -> EvalRes {
         let mut evald_args = Vec::new();
         for arg in args {
             let res = try!(eval(arg, env));
@@ -223,7 +224,7 @@ impl BuiltinProc {
         }
     }
 
-    fn eval_equal(args: &Vec<Rc<Expr>>, env: &Rc<Environment>) -> EvalRes {
+    fn eval_equal(args: &Vec<Rc<Expr>>, env: &Rc<RefCell<Environment>>) -> EvalRes {
         let mut iter = args.iter();
         let mut last = try!(eval(iter.next().unwrap(), env));
         for arg in iter {
@@ -236,7 +237,7 @@ impl BuiltinProc {
         Ok(Expr::new_boolean(true))
     }
 
-    fn eval_logic_junctor(&self, args: &Vec<Rc<Expr>>, env: &Rc<Environment>) -> EvalRes {
+    fn eval_logic_junctor(&self, args: &Vec<Rc<Expr>>, env: &Rc<RefCell<Environment>>) -> EvalRes {
         let mut evald_args = Vec::new();
         for arg in args {
             let res = try!(eval(arg, env));
@@ -259,13 +260,13 @@ impl BuiltinProc {
         }
     }
 
-    fn eval_cons(args: &Vec<Rc<Expr>>, env: &Rc<Environment>) -> EvalRes {
+    fn eval_cons(args: &Vec<Rc<Expr>>, env: &Rc<RefCell<Environment>>) -> EvalRes {
         let head = try!(eval(&args[0], env));
         let tail = try!(eval(&args[1], env));
         Ok(Expr::new_pair(head, tail))
     }
 
-    fn eval_head_tail(&self, args: &Vec<Rc<Expr>>, env: &Rc<Environment>) -> EvalRes {
+    fn eval_head_tail(&self, args: &Vec<Rc<Expr>>, env: &Rc<RefCell<Environment>>) -> EvalRes {
         match *try!(eval(&args[0], env)) {
             Expr::Pair(ref head, ref tail) => {
                 match *self {
@@ -283,7 +284,7 @@ impl BuiltinProc {
         }
     }
 
-    fn eval_print(args: &Vec<Rc<Expr>>, env: &Rc<Environment>) -> EvalRes {
+    fn eval_print(args: &Vec<Rc<Expr>>, env: &Rc<RefCell<Environment>>) -> EvalRes {
         for arg in args {
             println!("{}", try!(eval(arg, env)));
         }
