@@ -60,13 +60,14 @@ Boolean values are represented by the `#true` and `#false` literals in lisp.
 ### Lambdas ###
 
 A Lambda is an anonymous function object.
-It can be created using the lambda for.
+It can be created using the lambda form.
 
 
 ### Pairs ###
 
 A Pair is a compound data type which holds two other values.
 The first element of a pair is called its head, the other its tail.
+
 Lisp lists are represented as nested pairs:
 The first element of the pair points to its first value, the second to a list containing the remainder of the list.
 The empty list is represented by `#nil`.
@@ -165,14 +166,14 @@ Each symbol may only be defined once per scope.
 
 ### lambda ###
 
-(**lambda** (*param_1* ... *param_n*) *body*)
+(**lambda** (*param_1* ... *param_n*[...]) *body*)
 
-Returns an anonymous function object with the parameters `param` and the body `body`.
-If the lambda is invoked with the correct amount of arguments, the functions body is evaluated with `param_1` defined as the first argument, `param_2` with the second argument, and so forth.
-Lambdas *capture* the symbols in their environment.
-This means that symbols which are defined outside of the lambda can still be referred to in a lambda if they go out of scope.
-Anonymous functions are often used in conjunction with a define or let statement to bind them to a name.
-
+Returns an anonymous function object with the parameters *param* and the body *body*.
+If the lambda is invoked with the correct amount of arguments, the functions body is evaluated with *param_1* defined as the first argument, *param_2* with the second argument, and so forth.
+Lambdas *capture* the symbols in their environment, which means that symbols which were in scope while the lambda was defined can be referred to in the lambda, even if the symbols themselves go out of scope.
+If the last parameter is suffixed with a "...", the lambda is said to be variadic.
+Variadic functions can take a variable number of arguments, but always at least *n*-1.
+Upon function invokation, the first *n*-1 parameters are bound as usual, and the remaining arguments bound to *param_n* in form of a list.
 
 The following expression defines square as a function which takes an argument and retuns its square:
 
@@ -206,7 +207,10 @@ This function calculates the greatest common divisor of two numbers `a` and `b` 
 
 Applies the arguments `arg_1` ... `arg_n` to the procedure `proc`.
 If the number of arguments matches the number of the procedure's parameters, the procedure's body is evaluated with its parameters `param_i` defined as `arg_i`.
-The number of arguments must not surpass the number of the procedures parameters.
+The number of arguments must not surpass the number of the procedures parameters if the procedure is not variadic.
+
+If the procedure is variadic, has *m* parameters and at least *m*-1 arguments are supplied, the procedure's body is also evaluated, with the first *m*-1 parameters bound to the first *m*-1 arguments are bound to the corresponding parameters, and the remaining arguments bound to *param_m* in form of a list.
+If *n* = *m*-1, then *param_m* is bound to the empty list.
 
 ```lisp
 (+ 1 2) -> 3
@@ -238,12 +242,16 @@ Similarly, `half` is bound to `(lambda (x) (/ x 2))`.
 
 #### + ####
 
-(**+** *number_1* *number_2*)
+(**+** *numbers*...)
 
-Adds two numbers.
+Calculates the sum of the numbers.
+If no numbers are given, the neutral element of addition 0 is returned.
 
 ```lisp
 (+ 2 3) -> 5
+(+) -> 0
+(+ 1) -> 1
+(+ 2 3 4 5) -> 14
 ```
 
 
@@ -260,12 +268,16 @@ Subtracts two numbers.
 
 #### * ####
 
-(**&#42;** *number_1* *number_2*)
+(**&#42;** *numbers*...)
 
-Multiplies two numbers.
+Calculates the product of the numbers.
+If no numbers are given, the neutral element of multiplication 1 is returned.
 
 ```lisp
 (* 2 3) -> 6
+(*) -> 1
+(* 2) -> 2
+(* 2 3 4 5) -> 120
 ```
 
 
@@ -296,39 +308,45 @@ Calculates the remainder of a division.
 
 #### = ####
 
-(**=** *expr_1* *expr_2*)
+(**=** *expr_1* *expr_2* *exprs*...)
 
-Checks if two values are equal.
+Checks if the results of multiple expressions are equal.
 
 ```lisp
 (= 3 3) -> #true
 (= 3 5) -> #false
 (= 'foo 'foo) -> #true
 (= '(1 2 3) '(1 2 3)) -> #true
+(= 3 3 3) -> #true
+(= 1 2 3) -> #false
 ```
 
 
 #### < ####
 
-(**<** *number_1* *number_2*)
+(**<** *number_1* *number_2* *numbers*...)
 
-Returns #true if and only if the first argument is less than the second.
+Returns #true if and only if the each argument is less than the ones succeeding it.
 
 ```lisp
 (< 1 2) -> #true
 (< 2 1) -> #false
+(< 1 2 3) -> #true
+(< 3 2 1) -> #false
 ```
 
 
 #### > ####
 
-(**>** *number_1* *number_2*)
+(**>** *number_1* *number_2* *numbers*...)
 
-Returns `#true` if first argument is greater than the second, and `#false` otherwise.
+Returns `#true` if each argument is greater than the ones succeeding it, and `#false` otherwise.
 
 ```lisp
 (> 1 2) -> #false
 (> 2 1) -> #true
+(> 1 2 3) -> #false
+(> 3 2 1) -> #true
 ```
 
 
@@ -336,29 +354,35 @@ Returns `#true` if first argument is greater than the second, and `#false` other
 
 #### and ####
 
-(**and** *boolean_1* *boolean_2*)
+(**and** *booleans*...)
 
-Returns `#true` if and only if both arguments are `#true`.
+Returns `#true` if and only if all arguments are `#true`.
+If no arguments are given, `#true` is returned.
 
 ```lisp
 (and (> 5 3) (< 2 5)) -> #true
 (and (< 5 3) (< 2 5)) -> #false
 (and (< 5 3) (> 2 5)) -> #false
 (and 1 0) -> Type error: expected 'boolean', found 'number'
+(or #false #false #false #true) -> #false
+(or #true #true #true #true) -> #true
 ```
 
 
 #### or ####
 
-(**or** *boolean_1* *boolean_2*)
+(**or** *booleans*...)
 
 Returns `#true` if at least one of the arguments is `#true`.
+If no arguments are given, `#false` is returned.
 
 ```lisp
 (or (> 5 3) (< 2 5)) -> #true
 (or (< 5 3) (< 2 5)) -> #true
 (or (< 5 3) (> 2 5)) -> #false
 (or 1 0) -> Type error: expected 'boolean', found 'number'
+(or #false #false #false #true) -> #true
+(or #true #true #true #true) -> #true
 ```
 
 
@@ -380,7 +404,8 @@ Returns `#true` if the argument is `#false`, `#false` otherwise.
 (**cons** *expr_1* *expr_2*)
 
 Constructs a new pair.
-Lists are represented as nested pairs, with the first element of the pair being the head of the list, and the second containing the tail (i.e. the remainder of the list).
+
+Lists are built by nesting pairs, with the first element of a pair being the head of the list, and the second containing the tail (i.e. the remainder of the list).
 
 ```lisp
 (cons 'left 'right) -> (left . right)

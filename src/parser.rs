@@ -25,8 +25,8 @@ named!(expr<Rc<Expr> >,
 /// Recognizes the end of an expression, without affecting the parser.
 named!(end<char>,
        peek!(alt!(map!(multispace, |_| ' ') |
-                  char!('(') |
-                  char!(')') |
+                  char!('(') | char!(')') |
+                  char!('.') |
                   char!('\''))));
 
 named!(quote<Rc<Expr> >,
@@ -92,18 +92,18 @@ named!(define<Rc<Expr> >,
 named!(lambda<Rc<Expr> >,
        chain!(char!('(') ~ opt!(multispace) ~
               tag!("lambda") ~ opt!(multispace) ~
-              args: str_list ~
+              args: param_list ~
               body: expr ~ opt!(multispace) ~
               char!(')'),
-              || Expr::new_lambda(args, body, None)));
+              || Expr::new_lambda(args.0.clone(), args.1.clone(), body, None)));
 
-named!(str_list<Vec<String> >,
+named!(param_list<(Vec<String>, bool)>,
        chain!(char!('(') ~
               elems: many0!(
                   preceded!(opt!(multispace), map!(ident, String::from))) ~
-              opt!(multispace) ~
+              variadic: opt!(tag!("...")) ~ opt!(multispace) ~
               char!(')'),
-              || elems));
+              || (elems, variadic.is_some())));
 
 named!(list<Rc<Expr> >,
        chain!(char!('(') ~
@@ -148,7 +148,7 @@ named!(symbol<Rc<Expr> >,
 fn is_not_end(input: u8) -> bool {
     let c = input as char;
 
-    !(c.is_whitespace() || c == '(' || c == ')' || c == '\'')
+    !(c.is_whitespace() || c == '(' || c == ')' || c == '\'' || c == '.')
 }
 
 /// Parses an identifier.

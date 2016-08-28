@@ -17,7 +17,7 @@ pub enum Expr {
     Number(i32),
     Boolean(bool),
     Builtin(BuiltinProc),
-    Lambda(Vec<String>, Rc<Expr>, Option<Rc<RefCell<Environment>>>),
+    Lambda(Vec<String>, bool, Rc<Expr>, Option<Rc<RefCell<Environment>>>),
     Define(String, Rc<Expr>),
     Let(Vec<(String, Rc<Expr>)>, Rc<Expr>),
     Sequence(Vec<Rc<Expr>>),
@@ -61,8 +61,9 @@ impl Expr {
 
     /// Creates a new builtin procedure, wrapped in a lambda.
     pub fn new_builtin(procedure: BuiltinProc) -> Rc<Expr> {
-        let params: Vec<_> = (0..procedure.param_no()).map(|i| format!("x{}", i)).collect();
+        let params: Vec<_> = (0..procedure.param_no().1).map(|i| format!("x{}", i)).collect();
         Expr::new_lambda(params.clone(),
+                         procedure.param_no().0,
                          Expr::new_pair(Rc::new(Expr::Builtin(procedure)),
                                         Expr::new_list(params.iter()
                                                              .map(|name| {
@@ -73,10 +74,11 @@ impl Expr {
     }
 
     pub fn new_lambda(args: Vec<String>,
+                      variadic: bool,
                       body: Rc<Expr>,
                       env: Option<Rc<RefCell<Environment>>>)
                       -> Rc<Expr> {
-        Rc::new(Expr::Lambda(args, body, env))
+        Rc::new(Expr::Lambda(args, variadic, body, env))
     }
 
     pub fn new_define(symbol: String, expr: Rc<Expr>) -> Rc<Expr> {
@@ -112,7 +114,7 @@ impl Expr {
         }
     }
 
-    fn iter(&self) -> LispListIter {
+    pub fn iter(&self) -> LispListIter {
         LispListIter { list: Rc::new((*self).clone()) }
     }
 }
@@ -150,13 +152,16 @@ impl fmt::Display for Expr {
             }
             Expr::Number(val) => write!(f, "{}", val),
             Expr::Boolean(val) => write!(f, "#{}", val),
-            Expr::Lambda(ref params, ref body, _) => {
+            Expr::Lambda(ref params, variadic, ref body, _) => {
                 try!(write!(f, "(lambda ("));
                 if !params.is_empty() {
                     try!(write!(f, "{}", params[0]));
                     for param in &params[1..] {
                         try!(write!(f, " {}", param));
                     }
+                }
+                if variadic {
+                    try!(write!(f, "..."));
                 }
                 write!(f, ") {})", body)
 
@@ -373,11 +378,11 @@ fn eval_partially(expr: &Rc<Expr>, env: &Rc<RefCell<Environment>>) -> PartialEva
             PartialEvalRes::from_eval_res(eval_define(symb, expr, env))
         }
         Expr::Let(ref defs, ref body) => eval_let(defs, body, env.clone()),
-        Expr::Lambda(ref params, ref body, ref lambda_env) => {
+        Expr::Lambda(ref params, variadic, ref body, ref lambda_env) => {
             // If the lambda is not bound to an environment yet, bind it to the current environment.
             // This way variables from this environment are captured.
             let res = match *lambda_env {
-                None => Expr::new_lambda(params.clone(), body.clone(), Some(env.clone())),
+                None => Expr::new_lambda(params.clone(), variadic, body.clone(), Some(env.clone())),
                 _ => expr.clone(),
 
             };
@@ -427,9 +432,9 @@ fn eval_pair(head: &Rc<Expr>, tail: &Expr, env: &Rc<RefCell<Environment>>) -> Pa
     }
 
     match *first {
-        Expr::Lambda(ref params, _, _) => {
+        Expr::Lambda(ref params, variadic, _, _) => {
             // check the number of arguments given
-            if evaled_args.len() > params.len() {
+            if !variadic && evaled_args.len() > params.len() {
                 // too many arguments
                 PartialEvalRes::Err(EvalErr::TooManyArgs {
                     found: evaled_args.len(),
@@ -457,15 +462,19 @@ fn eval_pair(head: &Rc<Expr>, tail: &Expr, env: &Rc<RefCell<Environment>>) -> Pa
 ///
 /// If the number of arguments matches the adicity of the procedure, and no placeholders were
 /// passed, the procedure's body is evaluated with the arguments bound to the corresponding
-/// parameters.  Otherwise a new lambda with the remaining parameters having the given arguments
-/// bound to it is returned.
+/// parameters.  In case of a variadic procedure, arguments bound to the variadic element are
+/// composed into a list.
+///
+/// If too few arguments are supplied, or some of the argumets are placeholders, the function is
+/// "curried", and a new function taking less arguments is returned.  If the function is variadic
+/// and there are less arguments then parameters, the variadic parameter is assumed to be empty.
 ///
 /// # Panics
 ///
 /// If procedure isn't a lambda.  This should be made impossible by the logic in eval_pair.
 fn apply_to_procedure(procedure: &Rc<Expr>, args: Vec<Rc<Expr>>) -> PartialEvalRes {
-    let (params, body, lambda_env) = match **procedure {
-        Expr::Lambda(ref params, ref body, ref env) => (params, body, env),
+    let (params, variadic, body, lambda_env) = match **procedure {
+        Expr::Lambda(ref params, variadic, ref body, ref env) => (params, variadic, body, env),
         _ => unreachable!(),
     };
 
@@ -487,18 +496,88 @@ fn apply_to_procedure(procedure: &Rc<Expr>, args: Vec<Rc<Expr>>) -> PartialEvalR
                 _ => borrowed_lambda_scope.insert(param, arg),
             };
         }
+
+        if variadic {
+            if args.len() < params.len() - 1 {
+                // function is curried, without defining any element in the argument list
+                borrowed_lambda_scope.insert(params[params.len() - 1].clone(), Expr::new_nil());
+            } else {
+                let mut placeholder_no = 0;
+
+                // collect remaining arguments
+                let vararg_list = args[params.len() - 1..]
+                                      .iter()
+                                      .cloned()
+                                      .map(|x| {
+                                          match *x {
+                                              Expr::Placeholder => {
+                                                  let name = format!("_tl_placeholder_{}",
+                                                                     placeholder_no);
+                                                  placeholder_no += 1;
+                                                  Rc::new(Expr::Symbol(name))
+                                              }
+                                              _ => x,
+                                          }
+                                      })
+                                      .rev()
+                                      .fold(Expr::new_nil(), |xs, x| Expr::new_pair(x, xs));
+
+                if placeholder_no == 0 {
+                    // none of the arguments in the variadic part were skipped with placeholders;
+                    // bind normally
+                    borrowed_lambda_scope.insert(params[params.len() - 1].clone(), vararg_list);
+                } else {
+                    // if any of of the variadic parameters is a placeholder, the whole function
+                    // call is wrapped in another lambda
+
+                    // insert placeholder params
+                    for i in 0..placeholder_no {
+                        skipped_params.push(format!("_tl_placeholder_{}", i));
+                    }
+
+                    let arg_list = args[0..params.len() - 1]
+                                       .iter()
+                                       .zip(params.iter())
+                                       .map(|(arg, param)| {
+                                           match **arg {
+                                               Expr::Placeholder => {
+                                                   Rc::new(Expr::Symbol(param.clone()))
+                                               }
+                                               _ => arg.clone(),
+                                           }
+                                       })
+                                       .rev()
+                                       .fold(vararg_list, |xs, x| Expr::new_pair(x, xs));
+
+                    let res = Expr::new_lambda(skipped_params,
+                                               false,
+                                               Expr::new_pair(procedure.clone(), arg_list),
+                                               lambda_env.clone());
+                    return PartialEvalRes::Done(res);
+                }
+            }
+        }
     }
 
-    if skipped_params.is_empty() && args.len() == params.len() {
+    if skipped_params.is_empty() &&
+       (args.len() == params.len() || (variadic && args.len() >= params.len() - 1)) {
         // correct amount of arguments, evaluate body
         eval_partially(&body, &lambda_scope)
-    } else {
+    } else if !variadic {
         // too few arguments were given; return curried lambda
         let remaining_params = skipped_params.iter()
                                              .chain(params[args.len()..].iter())
                                              .cloned()
                                              .collect();
-        PartialEvalRes::Done(Expr::new_lambda(remaining_params, body.clone(), Some(lambda_scope)))
+        PartialEvalRes::Done(Expr::new_lambda(remaining_params,
+                                              false,
+                                              body.clone(),
+                                              Some(lambda_scope)))
+    } else {
+        PartialEvalRes::Done(Expr::new_lambda(skipped_params,
+                                              false,
+                                              body.clone(),
+                                              Some(lambda_scope)))
     }
 }
 

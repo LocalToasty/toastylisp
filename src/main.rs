@@ -84,6 +84,29 @@ mod tests {
 
     #[test]
     #[cfg_attr(rustfmt, rustfmt_skip)]
+    fn variadic() {
+        let prog = "(define second (lambda (xs...) \
+                      (head (tail xs))))
+                    (second 1 2 3)";
+        assert_eq!(*parse_and_eval(prog), Expr::Number(2));
+    }
+
+    #[test]
+    #[cfg_attr(rustfmt, rustfmt_skip)]
+    fn variadic_curry() {
+        let prog = "(define f (lambda (x y xs...) \
+                      (cons y (head (tail xs))))) \
+                    ((f 1 _ 3 4 5) 2)";
+        assert_eq!(parse_and_eval(prog), Expr::new_pair(Expr::new_number(2), Expr::new_number(4)));
+
+        let prog = "(define f (lambda (x y xs...) \
+                      (cons y (head (tail xs))))) \
+                    ((f 1 _ 3 _ 5) 2 4)";
+        assert_eq!(parse_and_eval(prog), Expr::new_pair(Expr::new_number(2), Expr::new_number(4)));
+    }
+
+    #[test]
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn recursion() {
         let prog = "(define count \
                       (lambda (down up) \
@@ -214,6 +237,54 @@ mod tests {
     }
 
     #[test]
+    fn builtin_variadic() {
+        let prog = "(+ 1 2 3)";
+        assert_eq!(*parse_and_eval(prog), Expr::Number(6));
+
+        let prog = "(+ 1)";
+        assert_eq!(*parse_and_eval(prog), Expr::Number(1));
+
+        let prog = "(+)";
+        assert_eq!(*parse_and_eval(prog), Expr::Number(0));
+
+        let prog = "(* 1 2 3)";
+        assert_eq!(*parse_and_eval(prog), Expr::Number(6));
+
+        let prog = "(* 2)";
+        assert_eq!(*parse_and_eval(prog), Expr::Number(2));
+
+        let prog = "(*)";
+        assert_eq!(*parse_and_eval(prog), Expr::Number(1));
+
+        let prog = "(* 2 3)";
+        assert_eq!(*parse_and_eval(prog), Expr::Number(6));
+
+        let prog = "(< 1 2 3)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(true));
+
+        let prog = "(< 1 2 1)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(false));
+
+        let prog = "(> 3 2 3)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(false));
+
+        let prog = "(> 3 2 1)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(true));
+
+        let prog = "(and #true #true #false)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(false));
+
+        let prog = "(and #true #true #true)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(true));
+
+        let prog = "(or #false #false #true)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(true));
+
+        let prog = "(or #false #false #false)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(false));
+    }
+
+    #[test]
     fn redefine_builtin() {
         let prog = "(define + -) 1";
         assert_eq!(*parse_and_eval(prog), Expr::Number(1));
@@ -237,7 +308,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn too_many_placeholders() {
-        let prog = "(+ _ _ _)";
+        let prog = "(define f (lambda (x) x)) (f _ _ _)";
         parse_and_eval(prog);
     }
 

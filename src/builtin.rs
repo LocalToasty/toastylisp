@@ -58,20 +58,21 @@ pub enum BuiltinProc {
 }
 
 impl BuiltinProc {
-    /// Returns the number of arguments taken by the intrinsic procedure.
-    pub fn param_no(&self) -> usize {
+    /// Returns the number of arguments taken by the intrinsic procedure, as well as if it's
+    /// variadic or not.
+    pub fn param_no(&self) -> (bool, usize) {
         match *self {
             BuiltinProc::Add |
-            BuiltinProc::Sub |
             BuiltinProc::Mul |
-            BuiltinProc::Div |
-            BuiltinProc::Mod |
+            BuiltinProc::And |
+            BuiltinProc::Or => (true, 1),
             BuiltinProc::Eq |
             BuiltinProc::Lt |
-            BuiltinProc::Gt |
-            BuiltinProc::And |
-            BuiltinProc::Or |
-            BuiltinProc::Cons => 2,
+            BuiltinProc::Gt => (true, 3),
+            BuiltinProc::Sub |
+            BuiltinProc::Div |
+            BuiltinProc::Mod |
+            BuiltinProc::Cons => (false, 2),
             BuiltinProc::Not |
             BuiltinProc::Head |
             BuiltinProc::Tail |
@@ -82,9 +83,9 @@ impl BuiltinProc {
             BuiltinProc::IsQuote |
             BuiltinProc::IsLambda |
             BuiltinProc::IsPair |
-            BuiltinProc::IsNil |
+            BuiltinProc::IsNil => (false, 1),
             BuiltinProc::Print |
-            BuiltinProc::Error => 1,
+            BuiltinProc::Error => (true, 1),
         }
     }
 
@@ -100,12 +101,12 @@ impl BuiltinProc {
     pub fn eval(&self, args: Vec<Rc<Expr>>, env: &Rc<RefCell<Environment>>) -> EvalRes {
         match *self {
             BuiltinProc::Add |
+            BuiltinProc::Mul => self.eval_var_numeric(args),
             BuiltinProc::Sub |
-            BuiltinProc::Mul |
             BuiltinProc::Div |
-            BuiltinProc::Mod |
+            BuiltinProc::Mod => self.eval_fixed_numeric(args),
             BuiltinProc::Lt |
-            BuiltinProc::Gt => self.eval_numeric(args),
+            BuiltinProc::Gt => self.eval_ord(args),
             BuiltinProc::Eq => BuiltinProc::eval_equal(args),
             BuiltinProc::And | BuiltinProc::Or => self.eval_logic_junctor(args),
             BuiltinProc::Not => {
@@ -177,53 +178,119 @@ impl BuiltinProc {
         }
     }
 
-    fn eval_numeric(&self, args: Vec<Rc<Expr>>) -> EvalRes {
-        let mut evald_args = Vec::new();
-        for arg in args {
-            if let Expr::Number(n) = *arg {
-                evald_args.push(n)
-            } else {
-                return Err(EvalErr::TypeErr {
-                    expected: Type::Number,
-                    found: arg.get_type(),
-                });
+    fn eval_var_numeric(&self, args: Vec<Rc<Expr>>) -> EvalRes {
+        let mut num_args = Vec::new();
+        for arg in args[0].iter() {
+            match *try!(arg) {
+                Expr::Number(n) => num_args.push(n),
+                ref a @ _ => {
+                    return Err(EvalErr::TypeErr {
+                        expected: Type::Number,
+                        found: a.get_type(),
+                    })
+                }
             }
         }
 
-        let mut iter = evald_args.iter();
+        let iter = num_args.iter();
 
         match *self {
             BuiltinProc::Add => Ok(Expr::new_number(iter.fold(0, |acc, x| acc + x))),
-            BuiltinProc::Sub => {
-                let first = iter.next().unwrap();
-                Ok(Expr::new_number(iter.fold(*first, |acc, x| acc - x)))
-            }
             BuiltinProc::Mul => Ok(Expr::new_number(iter.fold(1, |acc, x| acc * x))),
-            BuiltinProc::Div => {
-                let first = iter.next().unwrap();
-                Ok(Expr::new_number(iter.fold(*first, |acc, x| acc / x)))
+            _ => unreachable!(),
+        }
+    }
+
+    fn eval_fixed_numeric(&self, args: Vec<Rc<Expr>>) -> EvalRes {
+        let mut num_args = Vec::new();
+        for arg in args {
+            match *arg {
+                Expr::Number(n) => num_args.push(n),
+                ref a @ _ => {
+                    return Err(EvalErr::TypeErr {
+                        expected: Type::Number,
+                        found: a.get_type(),
+                    })
+                }
             }
-            BuiltinProc::Mod => {
-                let first = iter.next().unwrap();
-                Ok(Expr::new_number(iter.fold(*first, |acc, x| acc % x)))
+        }
+
+        match *self {
+            BuiltinProc::Sub => Ok(Expr::new_number(num_args[0] - num_args[1])),
+            BuiltinProc::Div => Ok(Expr::new_number(num_args[0] / num_args[1])),
+            BuiltinProc::Mod => Ok(Expr::new_number(num_args[0] % num_args[1])),
+            _ => unreachable!(),
+        }
+    }
+
+    fn eval_equal(args: Vec<Rc<Expr>>) -> EvalRes {
+        if args[0] != args[1] {
+            return Ok(Expr::new_boolean(false));
+        }
+        
+        let mut last = args[1].clone();
+        for arg in args[2].iter() {
+            let curr = try!(arg);
+
+            if last != curr {
+                return Ok(Expr::new_boolean(false));
             }
+
+            last = curr;
+        }
+        Ok(Expr::new_boolean(true))
+    }
+
+    fn eval_ord(&self, args: Vec<Rc<Expr>>) -> EvalRes {
+        let mut last = if let Expr::Number(n) = *args[0] {
+            n
+        } else {
+            return Err(EvalErr::TypeErr {
+                expected: Type::Number,
+                found: args[0].get_type(),
+            });
+        };
+
+        let mut num_args = Vec::new();
+
+        if let Expr::Number(n) = *args[1] {
+            num_args.push(n);
+        } else {
+            return Err(EvalErr::TypeErr {
+                expected: Type::Number,
+                found: args[1].get_type(),
+            });
+        };
+        for arg in args[2].iter() {
+            match *try!(arg) {
+                Expr::Number(n) => num_args.push(n),
+                ref a @ _ => {
+                    return Err(EvalErr::TypeErr {
+                        expected: Type::Number,
+                        found: a.get_type(),
+                    })
+                }
+            }
+        }
+
+        match *self {
             BuiltinProc::Lt => {
-                let mut last = iter.next().unwrap();
-                while let Some(curr) = iter.next() {
-                    if !(last < curr) {
+                for arg in num_args {
+                    if !(last < arg) {
                         return Ok(Expr::new_boolean(false));
                     }
-                    last = curr;
+
+                    last = arg;
                 }
                 Ok(Expr::new_boolean(true))
             }
             BuiltinProc::Gt => {
-                let mut last = iter.next().unwrap();
-                while let Some(curr) = iter.next() {
-                    if !(last > curr) {
+                for arg in num_args {
+                    if !(last > arg) {
                         return Ok(Expr::new_boolean(false));
                     }
-                    last = curr;
+
+                    last = arg;
                 }
                 Ok(Expr::new_boolean(true))
             }
@@ -231,27 +298,15 @@ impl BuiltinProc {
         }
     }
 
-    fn eval_equal(args: Vec<Rc<Expr>>) -> EvalRes {
-        let mut iter = args.iter();
-        let mut last = iter.next().unwrap();
-        for arg in iter {
-            if last != arg {
-                return Ok(Expr::new_boolean(false));
-            }
-            last = arg;
-        }
-        Ok(Expr::new_boolean(true))
-    }
-
     fn eval_logic_junctor(&self, args: Vec<Rc<Expr>>) -> EvalRes {
         let mut boolean_args = Vec::new();
-        for arg in args {
-            match *arg {
+        for arg in args[0].iter() {
+            match *try!(arg) {
                 Expr::Boolean(b) => boolean_args.push(b),
-                _ => {
+                ref a @ _ => {
                     return Err(EvalErr::TypeErr {
                         expected: Type::Boolean,
-                        found: arg.get_type(),
+                        found: a.get_type(),
                     })
                 }
             }

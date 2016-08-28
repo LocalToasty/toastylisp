@@ -11,13 +11,13 @@ $ toastylisp [-v | --verbose ] <filename>
 
 - [x] Currying
 - [x] Tail call optimization
+- [x] Variadic functions
 
 
 ### Planned Features ###
 
 - [ ] Loading of external files
 - [ ] Quasiquotes
-- [ ] Variadic functions
 - [ ] Characters / Strings
 - [ ] Floating point numbers
 - [ ] Structures
@@ -249,7 +249,7 @@ And once again a look at how it is evaluated:
 8
 ```
 
-It can be seen, that the factorial function gets "wider and wider" as it descends into the recursion tree.
+It can be seen, that the factorial function gets "wider" as it descends into the recursion tree.
 Because of this, it will eventually overflow the stack.
 The GCD function however doesn't seem to "widen".
 This is because GCD is *tail recursive*.
@@ -357,6 +357,41 @@ If `f` is not commutative however, both functions will yield different results.
 Whenever there is a choice, `foldl` should be used, as it is tail recursive.
 
 
+### Variadic Functions ###
+
+Functions cannot only take a fixed number of arguments, but also be variadic.
+To create a variadic function, the last parameter of a function is simply suffixed with a `...`.
+Whenever the function is invoked, all but the last parameter is bound as usual, and the last parameter is bound to a list containing the remaining arguments.
+It should be noted that this can also be an empty list.
+
+Many of the builtin functions are defined as variadic, for example `+`, `*`, `=`, and the comparison operators `<` and `>`.
+```lisp
+(+ 1 2 3) -> 6
+(* 2 3 4) -> 24
+(= 1 1 2) -> #false
+(< 1 2 3) -> #true
+```
+
+Using variadic functions, we can easily define a list constructor:
+```lisp
+(define list (lambda (xs...) xs))
+(list 1 2 (+ 3 4)) -> (1 2 7)
+```
+
+A more often used function would be the one that composes other functions.
+Applying the composition of functions *f_1*,..., *f_n* to an argument *x* is equivalent to sucessively applying the functions from right to left: (*f_1* (*f_2* (...(*f_n* *x*)...))).
+The attentive reader might have noticed that this is indeed a form of right-associative fold:
+```lisp
+(define id (lambda (x) x))
+
+(define comp
+  (lambda (fs...)
+    (foldr (lambda (f g) (lambda (x) (f (g x))))
+           id
+           fs)))
+```
+
+
 ### Currying ###
 
 One of the defining features of ToastyLisp is currying, or partial function application.
@@ -365,15 +400,28 @@ This can be used to easily create new functions from already existent ones:
 ```lisp
 (define double (* 2))    ; double is now bound to (lambda (x) (* 2 x))
 (define increment (+ 1)) ; increment is bound to (lambda (x) (+ 1 x))
+(define neg (- 0))
 
-(double 10)   -> 20
+(double 10) -> 20
 (increment 5) -> 6
+(neg 2) -> -2
+```
+
+If something other than the first argument should be applied, the placeholder `_` can be used:
+```lisp
+(define half (/ _ 2))
+(define decrement (/ _ 1))
 ```
 
 This way we can also formulate our `sum` and `fac` functions from earlier more neatly:
 ```lisp
 (define fac (fac-iter 1))
 (define sum (foldl + 0))
+```
+
+Together with function composition, it is now possible to quickly create powerful functions from already existing ones:
+```lisp
+(define even? (comp (= 0) (mod _ 2)))
 ```
 
 -----
