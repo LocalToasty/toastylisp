@@ -19,7 +19,10 @@ $ toastylisp [-v | --verbose ] <filename>
 - [ ] Quasiquotes
 - [ ] Variadic functions
 - [ ] Characters / Strings
+- [ ] Floating point numbers
+- [ ] Structures
 - [ ] Classes
+- [ ] Static typing
 - [ ] Lazy evaluation
 - [ ] Parallelisation
 - [ ] REPL
@@ -244,6 +247,49 @@ And once again a look at how it is evaluated:
 (gcd 8 (mod 16 8))
 (gcd 8 0)
 8
+```
+
+
+### Pairs and Lists ###
+
+A pair is a data structure which holds exactly two other values.
+Pairs can be constructed using the `cons` function:
+```lisp
+(cons 1 2) -> (1 . 2)
+(cons + -) -> (+ . -)
+```
+
+The first element of a pair in toastylisp is called its head, the second one its tail.
+They can be accessed using the `head` and `tail` functions respectively:
+```lisp
+(define p (cons 1 2))
+(head p) -> 1
+(tail p) -> 2
+```
+
+A list is defined as a pair whose head holds the first element of the list, and whose tail contains a list containing all but its first element.
+The empty list is defined to be #nil.
+With this inductive definition we can now create lists using the `cons` function:
+```lisp
+(define ls (cons 1 (cons 2 (cons (+ 1 2) #nil))))
+(head ls) -> 1
+(tail ls) -> (2 3)
+```
+
+Most algorithms operating on lists do so recursively.
+They look at a finite amount of the lists first elements, perform calculations with them, and then repeat that procedure on the remainder of the list.
+One of the most used patterns on lists is the map function:
+```lisp
+(define map
+  (lambda (f xs)
+    (if (nil? xs) '()
+      (cons (f (head xs)) (map f (tail xs))))))
+```
+
+The map function takes a function `f` and a list `xs` and returns a new list, containing the result of f applied to each element.
+```lisp
+(map square '(2 3 4 5)) -> (4 9 16 25)
+(map (lambda (x) (* 2 x)) '(1 2 3)) -> (2 4 6)
 ```
 
 
