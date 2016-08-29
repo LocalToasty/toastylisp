@@ -97,7 +97,7 @@ impl BuiltinProc {
     /// # Panics
     ///
     /// The function panics if too few arguments are supplied.
-    pub fn eval(&self, args: &Vec<Rc<Expr>>, env: &Rc<RefCell<Environment>>) -> EvalRes {
+    pub fn eval(&self, args: Vec<Rc<Expr>>, env: &Rc<RefCell<Environment>>) -> EvalRes {
         match *self {
             BuiltinProc::Add |
             BuiltinProc::Sub |
@@ -105,11 +105,11 @@ impl BuiltinProc {
             BuiltinProc::Div |
             BuiltinProc::Mod |
             BuiltinProc::Lt |
-            BuiltinProc::Gt => self.eval_numeric(args, env),
-            BuiltinProc::Eq => BuiltinProc::eval_equal(args, env),
-            BuiltinProc::And | BuiltinProc::Or => self.eval_logic_junctor(args, env),
+            BuiltinProc::Gt => self.eval_numeric(args),
+            BuiltinProc::Eq => BuiltinProc::eval_equal(args),
+            BuiltinProc::And | BuiltinProc::Or => self.eval_logic_junctor(args),
             BuiltinProc::Not => {
-                match *try!(eval(&args[0], env)) {
+                match *args[0] {
                     Expr::Boolean(val) => Ok(Expr::new_boolean(!val)),
                     ref res @ _ => {
                         Err(EvalErr::TypeErr {
@@ -119,11 +119,10 @@ impl BuiltinProc {
                     }
                 }
             }
-            BuiltinProc::Cons => BuiltinProc::eval_cons(args, env),
-            BuiltinProc::Head | BuiltinProc::Tail => self.eval_head_tail(args, env),
+            BuiltinProc::Cons => BuiltinProc::eval_cons(args),
+            BuiltinProc::Head | BuiltinProc::Tail => self.eval_head_tail(args),
             BuiltinProc::Eval => {
-                let expr = try!(eval(&args[0], env));
-                eval(&expr, env)
+                eval(&args[0], env)
             }
             BuiltinProc::IsDefined => {
                 if let Expr::Symbol(ref name) = *args[0] {
@@ -140,56 +139,55 @@ impl BuiltinProc {
                 }
             }
             BuiltinProc::IsQuote => {
-                match *try!(eval(&args[0], env)) {
+                match *args[0] {
                     Expr::Quote(_) => Ok(Expr::new_boolean(true)),
                     _ => Ok(Expr::new_boolean(false)),
                 }
             }
             BuiltinProc::IsNumber => {
-                match *try!(eval(&args[0], env)) {
+                match *args[0] {
                     Expr::Number(_) => Ok(Expr::new_boolean(true)),
                     _ => Ok(Expr::new_boolean(false)),
                 }
             }
             BuiltinProc::IsBoolean => {
-                match *try!(eval(&args[0], env)) {
+                match *args[0] {
                     Expr::Boolean(_) => Ok(Expr::new_boolean(true)),
                     _ => Ok(Expr::new_boolean(false)),
                 }
             }
             BuiltinProc::IsLambda => {
-                match *try!(eval(&args[0], env)) {
+                match *args[0] {
                     Expr::Number(_) => Ok(Expr::new_boolean(true)),
                     _ => Ok(Expr::new_boolean(false)),
                 }
             }
             BuiltinProc::IsPair => {
-                match *try!(eval(&args[0], env)) {
+                match *args[0] {
                     Expr::Pair(..) => Ok(Expr::new_boolean(true)),
                     _ => Ok(Expr::new_boolean(false)),
                 }
             }
             BuiltinProc::IsNil => {
-                match *try!(eval(&args[0], env)) {
+                match *args[0] {
                     Expr::Nil => Ok(Expr::new_boolean(true)),
                     _ => Ok(Expr::new_boolean(false)),
                 }
             }
-            BuiltinProc::Print => BuiltinProc::eval_print(args, env),
-            BuiltinProc::Error => BuiltinProc::eval_error(args, env),
+            BuiltinProc::Print => BuiltinProc::eval_print(args),
+            BuiltinProc::Error => BuiltinProc::eval_error(args),
         }
     }
 
-    fn eval_numeric(&self, args: &Vec<Rc<Expr>>, env: &Rc<RefCell<Environment>>) -> EvalRes {
+    fn eval_numeric(&self, args: Vec<Rc<Expr>>) -> EvalRes {
         let mut evald_args = Vec::new();
         for arg in args {
-            let res = try!(eval(arg, env));
-            if let Expr::Number(n) = *res {
+            if let Expr::Number(n) = *arg {
                 evald_args.push(n)
             } else {
                 return Err(EvalErr::TypeErr {
                     expected: Type::Number,
-                    found: res.get_type(),
+                    found: arg.get_type(),
                 });
             }
         }
@@ -235,50 +233,42 @@ impl BuiltinProc {
         }
     }
 
-    fn eval_equal(args: &Vec<Rc<Expr>>, env: &Rc<RefCell<Environment>>) -> EvalRes {
+    fn eval_equal(args: Vec<Rc<Expr>>) -> EvalRes {
         let mut iter = args.iter();
-        let mut last = try!(eval(iter.next().unwrap(), env));
+        let mut last = iter.next().unwrap();
         for arg in iter {
-            let curr = try!(eval(arg, env));
-            if last != curr {
+            if last != arg {
                 return Ok(Expr::new_boolean(false));
             }
-            last = curr;
+            last = arg;
         }
         Ok(Expr::new_boolean(true))
     }
 
-    fn eval_logic_junctor(&self, args: &Vec<Rc<Expr>>, env: &Rc<RefCell<Environment>>) -> EvalRes {
-        let mut evald_args = Vec::new();
+    fn eval_logic_junctor(&self, args: Vec<Rc<Expr>>) -> EvalRes {
+        let mut boolean_args = Vec::new();
         for arg in args {
-            let res = try!(eval(arg, env));
-            if let Expr::Boolean(n) = *res {
-                evald_args.push(n)
-            } else {
-                return Err(EvalErr::TypeErr {
-                    expected: Type::Boolean,
-                    found: res.get_type(),
-                });
+            match *arg {
+                Expr::Boolean(b) => boolean_args.push(b),
+                _ => return Err(EvalErr::TypeErr{expected: Type::Boolean, found: arg.get_type()}),
             }
         }
 
-        let iter = evald_args.iter();
-
         match *self {
-            BuiltinProc::And => Ok(Expr::new_boolean(iter.fold(true, |acc, &x| acc && x))),
-            BuiltinProc::Or => Ok(Expr::new_boolean(iter.fold(false, |acc, &x| acc || x))),
+            BuiltinProc::And => Ok(Expr::new_boolean(boolean_args.iter().fold(true, |acc, &x| acc && x))),
+            BuiltinProc::Or => Ok(Expr::new_boolean(boolean_args.iter().fold(false, |acc, &x| acc || x))),
             _ => unreachable!(),
         }
     }
 
-    fn eval_cons(args: &Vec<Rc<Expr>>, env: &Rc<RefCell<Environment>>) -> EvalRes {
-        let head = try!(eval(&args[0], env));
-        let tail = try!(eval(&args[1], env));
+    fn eval_cons(args: Vec<Rc<Expr>>) -> EvalRes {
+        let head = args[0].clone();
+        let tail = args[1].clone();
         Ok(Expr::new_pair(head, tail))
     }
 
-    fn eval_head_tail(&self, args: &Vec<Rc<Expr>>, env: &Rc<RefCell<Environment>>) -> EvalRes {
-        match *try!(eval(&args[0], env)) {
+    fn eval_head_tail(&self, args: Vec<Rc<Expr>>) -> EvalRes {
+        match *args[0] {
             Expr::Pair(ref head, ref tail) => {
                 match *self {
                     BuiltinProc::Head => Ok(head.clone()),
@@ -295,19 +285,15 @@ impl BuiltinProc {
         }
     }
 
-    fn eval_print(args: &Vec<Rc<Expr>>, env: &Rc<RefCell<Environment>>) -> EvalRes {
+    fn eval_print(args: Vec<Rc<Expr>>) -> EvalRes {
         for arg in args {
-            println!("{}", try!(eval(arg, env)));
+            println!("{}", arg);
         }
         Ok(Expr::new_nil())
     }
 
-    fn eval_error(args: &Vec<Rc<Expr>>, env: &Rc<RefCell<Environment>>) -> EvalRes {
-        let mut messages = Vec::new();
-        for arg in args {
-            messages.push(try!(eval(arg, env)));
-        }
-        Err(EvalErr::LogicError(messages))
+    fn eval_error(args: Vec<Rc<Expr>>) -> EvalRes {
+        Err(EvalErr::LogicError(args))
     }
 }
 

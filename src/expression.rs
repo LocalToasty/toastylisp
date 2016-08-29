@@ -410,40 +410,36 @@ fn eval_pair(head: &Rc<Expr>, tail: &Expr, env: &Rc<RefCell<Environment>>) -> Pa
         Err(err) => return PartialEvalRes::Err(err),
     };
 
+    // collect arguments and map them to the parameters
+    let args: Vec<_> = match tail.iter().collect() {
+        Ok(args) => args,
+        Err(err) => return PartialEvalRes::Err(err),
+    };
+    let mut evaled_args = Vec::new();
+    for arg in args {
+        match eval(&arg, env) {
+            Ok(expr) => evaled_args.push(expr),
+            Err(err) => return PartialEvalRes::Err(err),
+        };
+    }
+
     match *first {
         Expr::Lambda(ref params, _, _) => {
-            // collect arguments and map them to the parameters
-            let args: Vec<_> = match tail.iter().collect() {
-                Ok(args) => args,
-                Err(err) => return PartialEvalRes::Err(err),
-            };
-
             // check the number of arguments given
-            if args.len() > params.len() {
+            if evaled_args.len() > params.len() {
                 // too many arguments
                 PartialEvalRes::Err(EvalErr::TooManyArgs {
-                    found: args.len(),
+                    found: evaled_args.len(),
                     expected: params.len(),
                 })
             } else {
-                let mut evaled_args = Vec::new();
-                for arg in args {
-                    match eval(&arg, env) {
-                        Ok(expr) => evaled_args.push(expr),
-                        Err(err) => return PartialEvalRes::Err(err),
-                    };
-                }
                 PartialEvalRes::TailCall(first.clone(), evaled_args)
             }
         }
         // built in functions are wrapped in lambdas, thus it is not necassary to do any argument
         // number checking / currying
         Expr::Builtin(ref procedure) => {
-            // collect arguments and map them to the parameters
-            match tail.iter().collect() {
-                Ok(args) => PartialEvalRes::from_eval_res(procedure.eval(&args, env)),
-                Err(err) => PartialEvalRes::Err(err),
-            }
+            PartialEvalRes::from_eval_res(procedure.eval(evaled_args, env))
         }
         _ => PartialEvalRes::Err(EvalErr::ProcExpected),
     }
