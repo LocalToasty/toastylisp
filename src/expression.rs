@@ -172,7 +172,7 @@ impl fmt::Display for Expr {
                 }
                 write!(f, ")")
             }
-            Expr::Nil => write!(f, "#nil"),
+            Expr::Nil => write!(f, "()"),
         }
     }
 }
