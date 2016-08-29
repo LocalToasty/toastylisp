@@ -211,4 +211,11 @@ mod tests {
                     (own-head (own-tail list))";
         assert_eq!(*parse_and_eval(prog), Expr::Number(2));
     }
+
+    #[test]
+    #[should_panic]
+    fn error() {
+        let prog = "(error '(this should fail))";
+        parse_and_eval(prog);
+    }
 }

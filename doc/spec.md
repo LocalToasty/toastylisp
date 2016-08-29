@@ -507,20 +507,6 @@ Checks if *expr* evaluates to #nil.
 ```
 
 
-#### print! ####
-
-(**print!** *expr*)
-
-Prints the result of *expr*.
-
-```lisp
-(print! 3)             ; prints 3
-(print! (* 7 8))       ; prints 56
-(print! '(hello world) ; prints (hello world)
-(print! (+ 2))         ; prints (lambda (x1) (intrinsic.+ 2 x1))
-```
-
-
 ### Miscellaneous ###
 
 #### eval ####
@@ -532,3 +518,24 @@ Evaluates a quoted expression.
 ```lisp
 (eval '(+ 2 3)) -> 5
 ```
+
+
+#### print ####
+
+(**print** *expr*)
+
+Prints the result of *expr*.
+
+```lisp
+(print 3)             ; prints 3
+(print (* 7 8))       ; prints 56
+(print '(hello world) ; prints (hello world)
+(print (+ 2))         ; prints (lambda (x1) (intrinsic.+ 2 x1))
+```
+
+
+#### error ####
+
+(**error** *message*)
+
+Terminates the program with an error message.

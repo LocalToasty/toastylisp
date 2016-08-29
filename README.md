@@ -101,12 +101,12 @@ This process is called shadowing.
 Consider the following procedure:
 ```lisp
 (define x 1)
-(print! x)    ; prints 1
+(print x)    ; prints 1
 
 (let ((x 2))
-  (print! x)) ; prints 2
+  (print x)) ; prints 2
 
-(print! x)    ; prints 1 again
+(print x)    ; prints 1 again
 ```
 
 Here we redefine `x` within the let form, shadowing its old definition.

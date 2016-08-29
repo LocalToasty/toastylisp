@@ -47,8 +47,8 @@ impl Environment {
         env.insert(String::from("pair?"),
                    Expr::new_builtin(BuiltinProc::IsPair));
         env.insert(String::from("nil?"), Expr::new_builtin(BuiltinProc::IsNil));
-        env.insert(String::from("print!"),
-                   Expr::new_builtin(BuiltinProc::Print));
+        env.insert(String::from("print"), Expr::new_builtin(BuiltinProc::Print));
+        env.insert(String::from("error"), Expr::new_builtin(BuiltinProc::Error));
 
         env
     }

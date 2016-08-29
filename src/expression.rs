@@ -244,6 +244,7 @@ pub enum EvalErr {
     },
     Redefinition(String),
     NonExhaustivePattern,
+    LogicError(Vec<Rc<Expr>>),
 }
 
 impl fmt::Display for EvalErr {
@@ -259,6 +260,13 @@ impl fmt::Display for EvalErr {
             }
             EvalErr::Redefinition(ref symb) => write!(f, "Redefinition of symbol '{}'", symb),
             EvalErr::NonExhaustivePattern => write!(f, "Non-exhaustive pattern"),
+            EvalErr::LogicError(ref msgs) => {
+                try!(write!(f, "Logic error:"));
+                for msg in msgs {
+                    try!(write!(f, " {}", msg));
+                }
+                Ok(())
+            }
         }
     }
 }

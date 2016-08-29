@@ -53,6 +53,8 @@ pub enum BuiltinProc {
     IsNil,
     /// Print an expression.
     Print,
+    /// Terminates the program with an error message.
+    Error,
 }
 
 impl BuiltinProc {
@@ -81,7 +83,8 @@ impl BuiltinProc {
             BuiltinProc::IsLambda |
             BuiltinProc::IsPair |
             BuiltinProc::IsNil |
-            BuiltinProc::Print => 1,
+            BuiltinProc::Print |
+            BuiltinProc::Error => 1,
         }
     }
 
@@ -173,6 +176,7 @@ impl BuiltinProc {
                 }
             }
             BuiltinProc::Print => BuiltinProc::eval_print(args, env),
+            BuiltinProc::Error => BuiltinProc::eval_error(args, env),
         }
     }
 
@@ -297,6 +301,14 @@ impl BuiltinProc {
         }
         Ok(Expr::new_nil())
     }
+
+    fn eval_error(args: &Vec<Rc<Expr>>, env: &Rc<RefCell<Environment>>) -> EvalRes {
+        let mut messages = Vec::new();
+        for arg in args {
+            messages.push(try!(eval(arg, env)));
+        }
+        Err(EvalErr::LogicError(messages))
+    }
 }
 
 impl fmt::Display for BuiltinProc {
@@ -324,7 +336,8 @@ impl fmt::Display for BuiltinProc {
             BuiltinProc::IsLambda => write!(f, "builtin.lambda?"),
             BuiltinProc::IsPair => write!(f, "builtin.pair?"),
             BuiltinProc::IsNil => write!(f, "builtin.nil?"),
-            BuiltinProc::Print => write!(f, "builtin.print!"),
+            BuiltinProc::Print => write!(f, "builtin.print"),
+            BuiltinProc::Error => write!(f, "builtin.error"),
         }
     }
 }
