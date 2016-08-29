@@ -115,6 +115,12 @@ mod tests {
     }
 
     #[test]
+    fn redefine_builtin() {
+        let prog = "(define + -) 1";
+        assert_eq!(*parse_and_eval(prog), Expr::Number(1));
+    }
+
+    #[test]
     fn eval() {
         let prog = "(eval '(+ 1 (* 2 3)))";
         assert_eq!(*parse_and_eval(prog), Expr::Number(7));

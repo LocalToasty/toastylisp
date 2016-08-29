@@ -366,7 +366,9 @@ fn eval_partially(expr: &Rc<Expr>, env: &Rc<RefCell<Environment>>) -> PartialEva
         Expr::Pair(ref head, ref tail) => eval_pair(head, tail, env),
         Expr::If(ref pred, ref cons, ref alt) => eval_if(pred, cons, alt, env),
         Expr::Cond(ref cases) => eval_cond(cases, env),
-        Expr::Define(_, ref expr) => eval_partially(expr, env),
+        Expr::Define(ref symb, ref expr) => {
+            PartialEvalRes::from_eval_res(eval_define(symb, expr, env))
+        }
         Expr::Let(ref defs, ref body) => eval_let(defs, body, env.clone()),
         Expr::Lambda(ref params, ref body, ref lambda_env) => {
             // If the lambda is not bound to an environment yet, bind it to the current environment.
@@ -540,6 +542,17 @@ fn eval_cond(cases: &Vec<(Rc<Expr>, Rc<Expr>)>, env: &Rc<RefCell<Environment>>) 
     PartialEvalRes::Err(EvalErr::NonExhaustivePattern)
 }
 
+fn eval_define(symb: &String, expr: &Rc<Expr>, env: &Rc<RefCell<Environment>>) -> EvalRes {
+    let already_defined = env.borrow().locally_defined(symb);
+    if !already_defined {
+        let res = try!(eval(expr, &env));
+        env.borrow_mut().insert(symb.clone(), res.clone());
+        Ok(res)
+    } else {
+        Err(EvalErr::Redefinition(symb.clone()))
+    }
+}
+
 /// Evaluates a let expression.
 ///
 /// # Errors
@@ -584,35 +597,12 @@ fn eval_sequence(exprs: &Vec<Rc<Expr>>, env: Rc<RefCell<Environment>>) -> Partia
             verbose = Some(indent + 1);
         }
     }
+
     let seq_env = Environment::new_scope(env);
     let (last, inits) = exprs.split_last().unwrap();
     for expr in inits {
-        match **expr {
-            Expr::Define(ref name, ref body) => {
-                unsafe {
-                    if let Some(indent) = verbose {
-                        for _ in 0..indent - 1 {
-                            print!("   |");
-                        }
-                        println!("   {}", expr);
-                    }
-                }
-
-                let already_defined = !seq_env.borrow().locally_defined(name);
-                if already_defined {
-                    match eval(body, &seq_env) {
-                        Ok(res) => seq_env.borrow_mut().insert(name.clone(), res.clone()),
-                        Err(err) => return PartialEvalRes::Err(err),
-                    }
-                } else {
-                    return PartialEvalRes::Err(EvalErr::Redefinition(name.clone()));
-                }
-            }
-            _ => {
-                if let Err(err) = eval(expr, &seq_env) {
-                    return PartialEvalRes::Err(err);
-                }
-            }
+        if let Err(err) = eval(expr, &seq_env) {
+            return PartialEvalRes::Err(err);
         }
     }
 
@@ -621,6 +611,7 @@ fn eval_sequence(exprs: &Vec<Rc<Expr>>, env: Rc<RefCell<Environment>>) -> Partia
             verbose = Some(indent - 1);
         }
     }
+
     match **last {
         Expr::Pair(..) => eval_partially(last, &seq_env),
         _ => PartialEvalRes::from_eval_res(eval(last, &seq_env)),
