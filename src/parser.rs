@@ -10,16 +10,23 @@ named!(pub parse_root<Rc<Expr> >,
 
 named!(expr<Rc<Expr> >,
        preceded!(opt!(multispace),
-                 alt!(quote |
-                      if_expr |
-                      cond |
-                      let_expr |
-                      sequence |
-                      define |
-                      lambda |
-                      list |
-                      literal |
-                      symbol)));
+                 alt_complete!(quote |
+                               if_expr |
+                               cond |
+                               let_expr |
+                               sequence |
+                               define |
+                               lambda |
+                               list |
+                               literal |
+                               symbol)));
+
+/// Recognizes the end of an expression, without affecting the parser.
+named!(end<char>,
+       peek!(alt!(map!(multispace, |_| ' ') |
+                  char!('(') |
+                  char!(')') |
+                  char!('\''))));
 
 named!(quote<Rc<Expr> >,
        chain!(char!('\'') ~ opt!(multispace) ~
@@ -28,7 +35,7 @@ named!(quote<Rc<Expr> >,
 
 named!(if_expr<Rc<Expr> >,
        chain!(char!('(') ~ opt!(multispace) ~
-              tag!("if") ~ multispace ~
+              tag!("if") ~ end ~
               pred: expr ~
               cons: expr ~
               alt: expr ~ opt!(multispace) ~
@@ -37,7 +44,7 @@ named!(if_expr<Rc<Expr> >,
 
 named!(cond<Rc<Expr> >,
        chain!(char!('(') ~ opt!(multispace) ~
-              tag!("cond") ~ multispace ~
+              tag!("cond") ~ end ~
               cases: many0!(chain!(opt!(multispace) ~
                                    char!('(') ~
                                    pred: expr ~
@@ -65,7 +72,7 @@ named!(let_expr<Rc<Expr> >,
 
 named!(sequence<Rc<Expr> >,
        chain!(char!('(') ~ opt!(multispace) ~
-              tag!("sequence") ~ multispace ~
+              tag!("sequence") ~ end ~
               seq: parse_root ~ opt!(multispace) ~
               char!(')'),
               || seq));
@@ -130,34 +137,23 @@ named!(boolean<bool>,
        alt!(map!(tag!("#true"), |_| true) |
             map!(tag!("#false"), |_| false)));
 
+
 named!(symbol<Rc<Expr> >,
        map!(ident, Expr::new_symbol));
+
+fn is_not_end(input: u8) -> bool {
+    let c = input as char;
+
+    !(c.is_whitespace() || c == '(' || c == ')' || c == '\'')
+}
 
 /// Parses an identifier.
 ///
 /// An identifier consists of one or more characters which are not whitespace, '(', ')', or ''' .
 /// The first character furthermore must not be a numeric one.
-fn ident(input: &[u8]) -> IResult<&[u8], &str> {
-    if input.is_empty() {
-        return IResult::Error(Err::Code(ErrorKind::Custom(0x1000)));
-    }
-
-    let first = input[0] as char;
-    if first.is_whitespace() || first.is_numeric() || first == '(' || first == ')' ||
-       first == '\'' || first == '#' {
-        return IResult::Error(Err::Code(ErrorKind::Custom(0x1010)));
-    }
-
-    let mut len = 1;
-    for b in input[1..].iter() {
-        let c = *b as char;
-        if c.is_whitespace() || c == '(' || c == ')' || c == '\'' {
-            break;
-        }
-        len += 1;
-    }
-    return IResult::Done(&input[len..], str::from_utf8(&input[0..len]).unwrap());
-}
+named!(ident<&str>,
+       map_res!(take_while1!(is_not_end),
+                str::from_utf8));
 
 /// Removes all comments from a string.
 pub fn remove_comments(input: &str) -> Vec<u8> {
@@ -170,15 +166,6 @@ pub fn remove_comments(input: &str) -> Vec<u8> {
             }
 
             res.push(b);
-        }
-    }
-
-    // remove trailing whitespace
-    while let Some(c) = res.pop() {
-        let c = c as char;
-        if !(c == '\n' || c == '\r' || c == '\t' || c == ' ') {
-            res.push(c as u8);
-            break;
         }
     }
     res
