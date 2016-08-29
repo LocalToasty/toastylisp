@@ -37,12 +37,12 @@ fn parse_and_eval(input: &str) -> Rc<Expr> {
 }
 
 #[cfg(test)]
-#[cfg_attr(rustfmt, rustfmt_skip)]
 mod tests {
     use expression::Expr;
     use super::parse_and_eval;
 
     #[test]
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn comments() {
         let prog = "(define x ;hello world \n\
                             1) ; define x as 1 \n\
@@ -75,6 +75,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn lambda_with_list_arg() {
         let prog = "(define second (lambda (xs) (head (tail xs)))) \
                     (second '(1 2 3))";
@@ -82,6 +83,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn recursion() {
         let prog = "(define count \
                       (lambda (down up) \
@@ -93,6 +95,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn capture() {
         let prog = "(define f \
                       (let ((x 1)) \
@@ -103,15 +106,111 @@ mod tests {
 
     #[test]
     fn builtin() {
-        let prog = "(- (/ (+ (* 7 8) 4) 2) 3)";
-        assert_eq!(*parse_and_eval(prog), Expr::Number(27));
+        let prog = "(+ 2 3)";
+        assert_eq!(*parse_and_eval(prog), Expr::Number(5));
 
-        let prog = "(cons (+ 1 1) (+ 2 2))";
+        let prog = "(- 2 3)";
+        assert_eq!(*parse_and_eval(prog), Expr::Number(-1));
+
+        let prog = "(* 2 3)";
+        assert_eq!(*parse_and_eval(prog), Expr::Number(6));
+
+        let prog = "(/ 2 3)";
+        assert_eq!(*parse_and_eval(prog), Expr::Number(0));
+
+        let prog = "(mod 2 3)";
+        assert_eq!(*parse_and_eval(prog), Expr::Number(2));
+
+        let prog = "(< 2 3)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(true));
+
+        let prog = "(< 3 2)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(false));
+
+        let prog = "(> 2 3)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(false));
+
+        let prog = "(> 3 2)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(true));
+
+        let prog = "(and #true #false)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(false));
+
+        let prog = "(and #true #true)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(true));
+
+        let prog = "(or #true #false)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(true));
+
+        let prog = "(or #false #false)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(false));
+
+        let prog = "(not #false)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(true));
+
+        let prog = "(not #true)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(false));
+
+        let prog = "(cons 1 2)";
         assert_eq!(*parse_and_eval(prog),
-                   Expr::Pair(Expr::new_number(2), Expr::new_number(4)));
+                   Expr::Pair(Expr::new_number(1), Expr::new_number(2)));
 
-        let prog = "(mod 5 2)";
+        let prog = "(head (cons 1 2))";
         assert_eq!(*parse_and_eval(prog), Expr::Number(1));
+
+        let prog = "(tail (cons 1 2))";
+        assert_eq!(*parse_and_eval(prog), Expr::Number(2));
+
+        let prog = "(defined? 'x)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(false));
+
+        let prog = "(define x 1) (defined? 'x)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(true));
+
+        let prog = "(number? 3)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(true));
+
+        let prog = "(number? #nil)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(false));
+
+        let prog = "(boolean? #true)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(true));
+
+        let prog = "(boolean? #false)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(true));
+
+        let prog = "(boolean? #nil)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(false));
+
+        let prog = "(quote? ''foo)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(true));
+
+        let prog = "(quote? 'foo)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(false));
+
+        let prog = "(quote? 3)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(false));
+
+        let prog = "(lambda? (lambda (x) (x)))";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(true));
+
+        let prog = "(lambda? 0)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(false));
+
+        let prog = "(pair? (cons 1 2))";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(true));
+
+        let prog = "(pair? 0)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(false));
+
+        let prog = "(nil? #nil)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(true));
+
+        let prog = "(nil? '())";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(true));
+
+        let prog = "(nil? 0)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(false));
     }
 
     #[test]
@@ -128,16 +227,17 @@ mod tests {
 
     #[test]
     fn currying() {
-// single curry
+        // single curry
         let prog = "(((lambda (x y) y) 1) 2)";
         assert_eq!(*parse_and_eval(prog), Expr::Number(2));
 
-// double curry
+        // double curry
         let prog = "(((lambda (x y z) z) 1) 2) 3)";
         assert_eq!(*parse_and_eval(prog), Expr::Number(3));
     }
 
     #[test]
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn postponed_definition() {
 // define the value of bar after the one of foo
         let prog = "(define foo (lambda () bar)) \
@@ -162,6 +262,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn length() {
         let prog = "(define length \
                       (lambda (xs) \
@@ -173,6 +274,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn factorial() {
         let prog = "(define fac \
                       (lambda (x) \
@@ -184,6 +286,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn gcd() {
         let prog = "(define gcd \
                       (lambda (a b) \
@@ -195,6 +298,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn fibonacci() {
         let prog = "(define fib \
                       (lambda (n) \
@@ -206,6 +310,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn own_list() {
         let prog = "(define own-cons \
                       (lambda (a b) \

@@ -121,9 +121,7 @@ impl BuiltinProc {
             }
             BuiltinProc::Cons => BuiltinProc::eval_cons(args),
             BuiltinProc::Head | BuiltinProc::Tail => self.eval_head_tail(args),
-            BuiltinProc::Eval => {
-                eval(&args[0], env)
-            }
+            BuiltinProc::Eval => eval(&args[0], env),
             BuiltinProc::IsDefined => {
                 if let Expr::Symbol(ref name) = *args[0] {
                     if env.borrow().is_defined(name) {
@@ -158,7 +156,7 @@ impl BuiltinProc {
             }
             BuiltinProc::IsLambda => {
                 match *args[0] {
-                    Expr::Number(_) => Ok(Expr::new_boolean(true)),
+                    Expr::Lambda(..) => Ok(Expr::new_boolean(true)),
                     _ => Ok(Expr::new_boolean(false)),
                 }
             }
@@ -250,13 +248,22 @@ impl BuiltinProc {
         for arg in args {
             match *arg {
                 Expr::Boolean(b) => boolean_args.push(b),
-                _ => return Err(EvalErr::TypeErr{expected: Type::Boolean, found: arg.get_type()}),
+                _ => {
+                    return Err(EvalErr::TypeErr {
+                        expected: Type::Boolean,
+                        found: arg.get_type(),
+                    })
+                }
             }
         }
 
         match *self {
-            BuiltinProc::And => Ok(Expr::new_boolean(boolean_args.iter().fold(true, |acc, &x| acc && x))),
-            BuiltinProc::Or => Ok(Expr::new_boolean(boolean_args.iter().fold(false, |acc, &x| acc || x))),
+            BuiltinProc::And => {
+                Ok(Expr::new_boolean(boolean_args.iter().fold(true, |acc, &x| acc && x)))
+            }
+            BuiltinProc::Or => {
+                Ok(Expr::new_boolean(boolean_args.iter().fold(false, |acc, &x| acc || x)))
+            }
             _ => unreachable!(),
         }
     }
