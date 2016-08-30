@@ -318,7 +318,7 @@ pub fn eval(expr: &Rc<Expr>, env: &Rc<RefCell<Environment>>) -> EvalRes {
 
     loop {
         match res {
-            PartialEvalRes::TailCall(procedure, args) => res = apply_procedure(&procedure, args),
+            PartialEvalRes::TailCall(procedure, args) => res = apply_to_procedure(&procedure, args),
             PartialEvalRes::Done(expr) => {
                 unsafe {
                     if let Some(indent) = verbose {
@@ -453,8 +453,17 @@ fn eval_pair(head: &Rc<Expr>, tail: &Expr, env: &Rc<RefCell<Environment>>) -> Pa
     }
 }
 
-// TODO doc
-fn apply_procedure(procedure: &Rc<Expr>, args: Vec<Rc<Expr>>) -> PartialEvalRes {
+/// Applies arguments to a procedure.
+///
+/// If the number of arguments matches the adicity of the procedure, and no placeholders were
+/// passed, the procedure's body is evaluated with the arguments bound to the corresponding
+/// parameters.  Otherwise a new lambda with the remaining parameters having the given arguments
+/// bound to it is returned.
+///
+/// # Panics
+///
+/// If procedure isn't a lambda.  This should be made impossible by the logic in eval_pair.
+fn apply_to_procedure(procedure: &Rc<Expr>, args: Vec<Rc<Expr>>) -> PartialEvalRes {
     let (params, body, lambda_env) = match **procedure {
         Expr::Lambda(ref params, ref body, ref env) => (params, body, env),
         _ => unreachable!(),
@@ -489,16 +498,18 @@ fn apply_procedure(procedure: &Rc<Expr>, args: Vec<Rc<Expr>>) -> PartialEvalRes 
                                              .chain(params[args.len()..].iter())
                                              .cloned()
                                              .collect();
-        PartialEvalRes::Done(Expr::new_lambda(remaining_params,
-                                              body.clone(),
-                                              Some(lambda_scope)))
+        PartialEvalRes::Done(Expr::new_lambda(remaining_params, body.clone(), Some(lambda_scope)))
     }
 }
 
 /// Evaluates an if expression.
 ///
-/// If pred evaluates to something other than Expr::Nil, then the result of cons is returned.
-/// Otherwise alt will be evaluated.
+/// If pred evaluates to #true, then the result of cons is returned.
+/// If it evaluates to #false, alt will be evaluated.
+///
+/// # Errors
+///
+/// Returns a TypeErr, if the predicate evaluates to something other than a boolean.
 fn eval_if(pred: &Rc<Expr>,
            cons: &Rc<Expr>,
            alt: &Rc<Expr>,
@@ -530,8 +541,8 @@ fn eval_if(pred: &Rc<Expr>,
 ///
 /// # Errors
 ///
-/// If none of the predicates evaluate to a value different from nil, EvalErr::NonExhaustivePattern
-/// is returned.
+/// If none of the predicates evaluate to #true, EvalErr::NonExhaustivePattern is returned.
+/// If one of the predicates does not evaluate to a boolean, TypeErr is returned.
 fn eval_cond(cases: &Vec<(Rc<Expr>, Rc<Expr>)>, env: &Rc<RefCell<Environment>>) -> PartialEvalRes {
     for case in cases {
         let (ref pred, ref cons) = *case;
