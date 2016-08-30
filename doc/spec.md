@@ -206,7 +206,6 @@ This function calculates the greatest common divisor of two numbers `a` and `b` 
 
 Applies the arguments `arg_1` ... `arg_n` to the procedure `proc`.
 If the number of arguments matches the number of the procedure's parameters, the procedure's body is evaluated with its parameters `param_i` defined as `arg_i`.
-If too few arguments are supplied, the function is *curried*, meaning that a new procedure with the first *n* parameters already bound to `arg_1` to `arg_n` is returned.
 The number of arguments must not surpass the number of the procedures parameters.
 
 ```lisp
@@ -216,17 +215,22 @@ The number of arguments must not surpass the number of the procedures parameters
 (square 4) -> 14
 ```
 
-If too few arguments are supplied, the function is curried:
+If too few arguments are supplied, the function is *curried*, meaning that a new procedure with the first *n* parameters already bound to `arg_1` to `arg_n` is returned.
+Parameters can also be "skipped" using the placeholder `_`.
 
 ```lisp
 (define double (* 2))
+(define half (/ _ 2))
 ```
 
 Now `double` is bound to `(lambda (x) (* 2 x))`, a procedure which only takes one argument instead of two.
+Similarly, `half` is bound to `(lambda (x) (/ x 2))`.
 
 ```lisp
 (double 10) -> 20
+(half 10) -> 5
 ```
+
 
 ## Built in Procedures ##
 

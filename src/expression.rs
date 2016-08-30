@@ -11,6 +11,7 @@ pub enum Expr {
     Symbol(String),
     Quote(Rc<Expr>),
     Pair(Rc<Expr>, Rc<Expr>),
+    Placeholder,
     If(Rc<Expr>, Rc<Expr>, Rc<Expr>),
     Cond(Vec<(Rc<Expr>, Rc<Expr>)>),
     Number(i32),
@@ -37,6 +38,10 @@ impl Expr {
         Rc::new(Expr::Pair(head, tail))
     }
 
+    pub fn new_placeholder() -> Rc<Expr> {
+        Rc::new(Expr::Placeholder)
+    }
+
     pub fn new_list(exprs: Vec<Rc<Expr>>) -> Rc<Expr> {
         exprs.iter().rev().fold(Expr::new_nil(),
                                 |tail, head| Expr::new_pair(head.clone(), tail.clone()))
@@ -54,7 +59,7 @@ impl Expr {
         Rc::new(Expr::Number(num))
     }
 
-    /// Creates a new intrinsic procedure, wrapped in a lambda.
+    /// Creates a new builtin procedure, wrapped in a lambda.
     pub fn new_builtin(procedure: BuiltinProc) -> Rc<Expr> {
         let params: Vec<_> = (0..procedure.param_no()).map(|i| format!("x{}", i)).collect();
         Expr::new_lambda(params.clone(),
@@ -133,7 +138,7 @@ impl fmt::Display for Expr {
                     write!(f, " . {})", remainder)
                 }
             }
-
+            Expr::Placeholder => write!(f, "_"),
             Expr::If(ref pred, ref cons, ref alt) => write!(f, "(if {} {} {})", *pred, *cons, *alt),
             Expr::Cond(ref cases) => {
                 try!(write!(f, "(cond"));
@@ -237,7 +242,6 @@ pub enum EvalErr {
         expected: Type,
         found: Type,
     },
-    ProcExpected,
     TooManyArgs {
         expected: usize,
         found: usize,
@@ -254,7 +258,6 @@ impl fmt::Display for EvalErr {
             EvalErr::TypeErr { expected: ex, found: fo } => {
                 write!(f, "Type error: Expected {}, found {}", ex, fo)
             }
-            EvalErr::ProcExpected => write!(f, "Expected procedure"),
             EvalErr::TooManyArgs { expected: ex, found: fo } => {
                 write!(f, "Too many arguments: Expected {}, found {}", ex, fo)
             }
@@ -401,9 +404,9 @@ fn eval_partially(expr: &Rc<Expr>, env: &Rc<RefCell<Environment>>) -> PartialEva
 ///
 /// # Errors
 ///
-/// Returns EvalErr::ProcExpected, if the first element of the list isn't a procedure (i.e. either a
-/// lambda or an intrinsic procedure).  If the tail of the pair does not resemble a list,
-/// EvalErr::ArgListExpected is returned.
+/// Returns EvalErr::TypeErr, if the first element of the list isn't a procedure (i.e. either a
+/// lambda or an builtin procedure).  If the tail of the pair does not resemble a list,
+/// EvalErr::TypeErr is returned.
 fn eval_pair(head: &Rc<Expr>, tail: &Expr, env: &Rc<RefCell<Environment>>) -> PartialEvalRes {
     let first = match eval(head, env) {
         Ok(expr) => expr,
@@ -441,15 +444,24 @@ fn eval_pair(head: &Rc<Expr>, tail: &Expr, env: &Rc<RefCell<Environment>>) -> Pa
         Expr::Builtin(ref procedure) => {
             PartialEvalRes::from_eval_res(procedure.eval(evaled_args, env))
         }
-        _ => PartialEvalRes::Err(EvalErr::ProcExpected),
+        _ => {
+            PartialEvalRes::Err(EvalErr::TypeErr {
+                expected: Type::Lambda,
+                found: first.get_type(),
+            })
+        }
     }
 }
 
+// TODO doc
 fn apply_procedure(procedure: &Rc<Expr>, args: Vec<Rc<Expr>>) -> PartialEvalRes {
     let (params, body, lambda_env) = match **procedure {
         Expr::Lambda(ref params, ref body, ref env) => (params, body, env),
         _ => unreachable!(),
     };
+
+    // parameters skipped with place holders
+    let mut skipped_params = Vec::new();
 
     // add arguments to environment
     let lambda_scope = Environment::new_scope(lambda_env.clone().unwrap());
@@ -459,18 +471,27 @@ fn apply_procedure(procedure: &Rc<Expr>, args: Vec<Rc<Expr>>) -> PartialEvalRes 
         let defs = params.iter()
                          .zip(args.iter())
                          .map(|(param, arg)| (param.clone(), arg.clone()));
+
         for (param, arg) in defs {
-            borrowed_lambda_scope.insert(param, arg);
+            match *arg {
+                Expr::Placeholder => skipped_params.push(param),
+                _ => borrowed_lambda_scope.insert(param, arg),
+            };
         }
     }
 
-    if args.len() == params.len() {
+    if skipped_params.is_empty() && args.len() == params.len() {
         // correct amount of arguments, evaluate body
         eval_partially(&body, &lambda_scope)
     } else {
         // too few arguments were given; return curried lambda
-        let remaining_params = params[args.len()..].to_vec();
-        PartialEvalRes::Done(Expr::new_lambda(remaining_params, body.clone(), Some(lambda_scope)))
+        let remaining_params = skipped_params.iter()
+                                             .chain(params[args.len()..].iter())
+                                             .cloned()
+                                             .collect();
+        PartialEvalRes::Done(Expr::new_lambda(remaining_params,
+                                              body.clone(),
+                                              Some(lambda_scope)))
     }
 }
 

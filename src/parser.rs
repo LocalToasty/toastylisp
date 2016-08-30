@@ -11,6 +11,7 @@ named!(pub parse_root<Rc<Expr> >,
 named!(expr<Rc<Expr> >,
        preceded!(opt!(multispace),
                  alt_complete!(quote |
+                               placeholder |
                                if_expr |
                                cond |
                                let_expr |
@@ -32,6 +33,9 @@ named!(quote<Rc<Expr> >,
        chain!(char!('\'') ~ opt!(multispace) ~
               quotation: expr,
               || Expr::new_quote(quotation)));
+
+named!(placeholder<Rc<Expr> >,
+       map!(terminated!(char!('_'), end), |_| Expr::new_placeholder()));
 
 named!(if_expr<Rc<Expr> >,
        chain!(char!('(') ~ opt!(multispace) ~

@@ -220,12 +220,6 @@ mod tests {
     }
 
     #[test]
-    fn eval() {
-        let prog = "(eval '(+ 1 (* 2 3)))";
-        assert_eq!(*parse_and_eval(prog), Expr::Number(7));
-    }
-
-    #[test]
     fn currying() {
         // single curry
         let prog = "(((lambda (x y) y) 1) 2)";
@@ -234,7 +228,25 @@ mod tests {
         // double curry
         let prog = "(((lambda (x y z) z) 1) 2) 3)";
         assert_eq!(*parse_and_eval(prog), Expr::Number(3));
+
+        // currying with place holders
+        let prog = "((/ _ 2) 8)";
+        assert_eq!(*parse_and_eval(prog), Expr::Number(4));
     }
+
+    #[test]
+    #[should_panic]
+    fn too_many_placeholders() {
+        let prog = "(+ _ _ _)";
+        parse_and_eval(prog);
+    }
+
+    #[test]
+    fn eval() {
+        let prog = "(eval '(+ 1 (* 2 3)))";
+        assert_eq!(*parse_and_eval(prog), Expr::Number(7));
+    }
+
 
     #[test]
     #[cfg_attr(rustfmt, rustfmt_skip)]
