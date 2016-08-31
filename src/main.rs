@@ -287,6 +287,18 @@ mod tests {
 
     #[test]
     #[cfg_attr(rustfmt, rustfmt_skip)]
+    fn fold() {
+        let prog = "(define foldl \
+                      (lambda (f init xs) \
+                        (if (nil? xs) init\
+                          (foldl f (f init (head xs)) (tail xs))))) \
+                    (define sum (foldl + 0)) \
+                    (sum '(1 2 3))";
+        assert_eq!(*parse_and_eval(prog), Expr::Number(6));
+    }
+
+    #[test]
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn factorial() {
         let prog = "(define fac \
                       (lambda (x) \
