@@ -249,6 +249,37 @@ And once again a look at how it is evaluated:
 8
 ```
 
+It can be seen, that the factorial function gets "wider and wider" as it descends into the recursion tree.
+Because of this, it will eventually overflow the stack.
+The GCD function however doesn't seem to "widen".
+This is because GCD is *tail recursive*.
+Tail recursive functions call themselves as their last action, which allows the compiler to keep the heap size constant.
+Because of this, it is desirable for functions to be tail recursive, especially if it isn't known how deep the recursion will go.
+To illustrate how to make a function tail recursive, we will now rewrite the factorial function from above:
+```lisp
+(define fac-iter
+  (lambda (acc n)
+    (if (= n 0) acc
+      (fac-iter (* n acc) (- n 1)))))
+
+(define fac (lambda (n) (fac-iter (1 n))))
+```
+
+fac-iter is obviously tail recursive, as can be seen if looking at the way it's evaluated:
+```lisp
+(fac 3)
+(fac-iter 1 3)
+(fac-iter (* 3 1) (- 3 1))
+(fac-iter 3 2)
+(fac-iter (* 2 3) (- 2 1))
+(fac-iter 6 1)
+(fac-iter (* 1 6) (- 1 1))
+(fac-iter 6 0)
+6
+```
+
+While it was possible to convert the factorial function into a tail recursive function, this is not true for the general case.
+
 
 ### Pairs and Lists ###
 
@@ -292,6 +323,39 @@ The map function takes a function `f` and a list `xs` and returns a new list, co
 (map (lambda (x) (* 2 x)) '(1 2 3)) -> (2 4 6)
 ```
 
+Another common operation on lists are folds, sometimes also called "accumulations" or "reductions".
+A fold function takes a function `f`, and an initial value for the accumulator.
+```lisp
+(define foldl
+  (lambda (f init xs)
+    (if (nil? xs) init
+      (foldl f (f init (head xs)) (tail xs)))))
+```
+
+This function might seem a bit confusing at first, but after a bit of use it quickly becomes apparent how it works.
+```lisp
+(define sum (lambda (xs) (fold + 0 xs)))
+(sum '(1 2 3)) -> 6
+```
+
+The foldl function initializes the accumulator with `init` and then recursively updates it by assigning it to `f` applied to each element of the list.
+In this example, it is initialized with 0 and each element of the list is added to it, resulting in a function summing the list.
+The sum function applied to a list xs with elements *x_1* ... *x_n* is equivalent to (..((0 + *x_1*) + *x_2*) .. + *x_n*).
+
+A close cousin to the `foldl` function is `foldr`:
+```lisp
+(define foldr
+  (lambda (f init xs)
+    (if (nil? xs) init
+      (f (head xs) (foldr f init (tail xs))))))
+```
+
+It works similarly to `foldl`, but performs a right-associative fold on the list.
+If we had formulated our sum function with foldr instead of foldl, it would be equivalent to (*x_1* + (*x_2* + (... + (*x_n* + 0)))).
+In this special case foldl and foldr can be used interchangably.
+If `f` is not commutative however, both functions will yield different results.
+Whenever there is a choice, `foldl` should be used, as it is tail recursive.
+
 
 ### Currying ###
 
@@ -304,6 +368,12 @@ This can be used to easily create new functions from already existent ones:
 
 (double 10)   -> 20
 (increment 5) -> 6
+```
+
+This way we can also formulate our `sum` and `fac` functions from earlier more neatly:
+```lisp
+(define fac (fac-iter 1))
+(define sum (foldl + 0))
 ```
 
 -----
