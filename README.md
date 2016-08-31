@@ -398,8 +398,8 @@ One of the defining features of ToastyLisp is currying, or partial function appl
 Whenever a function is applied to less arguments than required, a new function with the given arguments already applied is created.
 This can be used to easily create new functions from already existent ones:
 ```lisp
-(define double (* 2))    ; double is now bound to (lambda (x) (* 2 x))
-(define increment (+ 1)) ; increment is bound to (lambda (x) (+ 1 x))
+(define double (* 2 _))    ; double is now bound to (lambda (x) (* 2 x))
+(define increment (+ 1 _)) ; increment is bound to (lambda (x) (+ 1 x))
 (define neg (- 0))
 
 (double 10) -> 20
