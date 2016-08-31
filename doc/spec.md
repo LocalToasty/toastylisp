@@ -1,6 +1,6 @@
 # ToastyLisp Specification #
 
-## Attention ##
+## Disclaimer ##
 
 This document is a draft and may contain major errors.
 
@@ -21,6 +21,7 @@ This document is a draft and may contain major errors.
   - [let](#let)
   - [define](#define)
   - [lambda](#lambda)
+  - [Function Application](#function-application)
 - [Built in Procedures](#built-in-procedures)
   - [Arithmetic Operations](#arithmetic-operations)
   - [Relations](#relations)
