@@ -1,5 +1,4 @@
 use std::str;
-use std::str::FromStr;
 use std::rc::Rc;
 use expression::Expr;
 use nom::*;
@@ -120,14 +119,13 @@ named!(literal<&str, Rc<Expr> >,
             map!(tag_s!("#nil"), |_| Expr::new_nil()) |
             map!(boolean, |b| Expr::new_boolean(b))));
 
-named!(positive_number<&str, i32>,
-       map_res!(digit,
-                FromStr::from_str));
-
 named!(number<&str, i32>,
        chain!(sign: opt!(alt!(tag_s!("+") |
                               tag_s!("-"))) ~
-              abs: positive_number,
+              abs: alt_complete!(map_res!(preceded!(alt!(tag_s!("0x") | tag_s!("0X")),
+                                                    is_a_s!("0123456789abcdefABCDEF")),
+                                 |s| i32::from_str_radix(s, 16)) |
+                        map_res!(digit, |s| i32::from_str_radix(s, 10))),
               || match sign {
                   Some("-") => 0 - abs,
                   _ => abs
@@ -211,8 +209,17 @@ mod tests {
 
     #[test]
     fn parse_number() {
+        // decimal
         assert_eq!(Expr::new_number(42), expr("42").unwrap().1);
-        assert_eq!(Expr::new_number(-7), expr("-7").unwrap().1);
+        // signed
+        assert_eq!(Expr::new_number(1337), expr("+1337").unwrap().1);
+        assert_eq!(Expr::new_number(-1337), expr("-1337").unwrap().1);
+
+        // hex
+        assert_eq!(Expr::new_number(0xdead), expr("0xdead").unwrap().1);
+        assert_eq!(Expr::new_number(0xbeef), expr("0XBEEF").unwrap().1);
+        // signed
+        assert_eq!(Expr::new_number(-0xcafe), expr("-0xcafe").unwrap().1);
     }
 
     #[test]

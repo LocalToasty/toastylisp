@@ -49,7 +49,25 @@ Whenever the interpreter encouters a `;`, it ignores everything until the end of
 ### Numbers ###
 
 A lisp number is a 32 bit signed integer.
-A number literal consists of an optional sign `+` or `-` followed by a digit which is not 0 zero or more digits.
+A number literal consists of an optional sign `+` or `-` succeeded by one of the following:
+
+1. a sequence of at one or more digits (0..9)
+2. `0x` of `0X` followed by a sequence of one or multiple of (0..9a..zA..z)
+
+In the first case, the number is interpreted in decimal base.
+In the second case, it is assumed that the number is hexadecimal.
+
+Some examples for valid numbers are:
+```lisp
+1
+100
++42
+-42
+0xcafe
+0XBEEF
+0xCaFe
+-0Xf00
+```
 
 
 ### Booleans ###
