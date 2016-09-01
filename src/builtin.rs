@@ -227,7 +227,7 @@ impl BuiltinProc {
         if args[0] != args[1] {
             return Ok(Expr::new_boolean(false));
         }
-        
+
         let mut last = args[1].clone();
         for arg in args[2].iter() {
             let curr = try!(arg);

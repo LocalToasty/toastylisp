@@ -31,7 +31,7 @@ fn main() {
 
 fn parse_and_eval(input: &str) -> Rc<Expr> {
     let sanatized_input = parser::remove_comments(input);
-    let prog = parser::parse_root(&sanatized_input[..]).unwrap().1;
+    let prog = parser::parse_root(sanatized_input.as_str()).unwrap().1;
     let env = Environment::new();
     eval(&prog, &Rc::new(RefCell::new(env))).unwrap()
 }
