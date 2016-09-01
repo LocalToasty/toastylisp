@@ -18,7 +18,7 @@ $ toastylisp [-v | --verbose ] <filename>
 
 - [ ] Loading of external files
 - [ ] Quasiquotes
-- [ ] Characters / Strings
+- [ ] Strings
 - [ ] Floating point numbers
 - [ ] Structures
 - [ ] Classes

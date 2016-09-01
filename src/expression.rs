@@ -20,6 +20,7 @@ pub enum Expr {
     Cond(Vec<(Rc<Expr>, Rc<Expr>)>),
     Number(i32),
     Boolean(bool),
+    Character(char),
     Builtin(BuiltinProc),
     Lambda {
         params: Vec<String>,
@@ -115,6 +116,10 @@ impl Expr {
         Rc::new(Expr::Boolean(val))
     }
 
+    pub fn new_character(val: char) -> Rc<Expr> {
+        Rc::new(Expr::Character(val))
+    }
+
     pub fn new_nil() -> Rc<Expr> {
         Rc::new(Expr::Nil)
     }
@@ -126,6 +131,7 @@ impl Expr {
             Expr::Pair(..) => Type::Pair,
             Expr::Number(_) => Type::Number,
             Expr::Boolean(_) => Type::Boolean,
+            Expr::Character(_) => Type::Character,
             Expr::Lambda{..} => Type::Lambda,
             Expr::Nil => Type::Nil,
             _ => Type::Expr,
@@ -170,6 +176,7 @@ impl fmt::Display for Expr {
             }
             Expr::Number(val) => write!(f, "{}", val),
             Expr::Boolean(val) => write!(f, "#{}", val),
+            Expr::Character(val) => write!(f, "{}", val),
             Expr::Lambda{ref params, variadic, ref body, env: _} => {
                 try!(write!(f, "(lambda ("));
                 if !params.is_empty() {
@@ -238,6 +245,7 @@ pub enum Type {
     Pair,
     Number,
     Boolean,
+    Character,
     Lambda,
     Nil,
     Expr,
@@ -251,6 +259,7 @@ impl fmt::Display for Type {
             Type::Pair => write!(f, "pair"),
             Type::Number => write!(f, "number"),
             Type::Boolean => write!(f, "boolean"),
+            Type::Character => write!(f, "char"),
             Type::Lambda => write!(f, "lambda"),
             Type::Nil => write!(f, "nil"),
             Type::Expr => write!(f, "expression"),

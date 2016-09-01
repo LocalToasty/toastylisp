@@ -11,6 +11,7 @@ This document is a draft and may contain major errors.
 - [Data Types](#data-types)
   - [Numbers](#numbers)
   - [Booleans](#booleans)
+  - [Characters](#characters)
   - [Lambdas](#lambdas)
   - [Pairs](#pairs)
   - [Nil](#nil)
@@ -27,6 +28,7 @@ This document is a draft and may contain major errors.
   - [Relations](#relations)
   - [Logical Junctors](#logical-junctors)
   - [List Operations](#list-operations)
+  - [Casts](#casts)
   - [Predicates](#predicates)
   - [Miscellaneous](#miscellaneous)
 
@@ -74,6 +76,22 @@ Some examples for valid numbers are:
 
 A boolean is a truth value; it can be either true or false.
 Boolean values are represented by the `#true` and `#false` literals in lisp.
+
+
+### Characters ###
+
+A character holds a 32 bit unicode value.
+Characters can be created using the character literal:
+
+| Character Type       | Literal     |
+|----------------------|-------------|
+| Normal Character `c` | `#c`        |
+| Horizontal Tabulator | `#\t`       |
+| New Line             | `#\n`       |
+| Carriage Return      | `#\r`       |
+| Backslash `\`        | `#\\`       |
+| Space                | `#\_`       |
+| Unicode Code Point   | `#\u{xxxx}` |
 
 
 ### Lambdas ###
@@ -457,6 +475,23 @@ If the list only has one element, the tail is the empty list, i.e. #nil.
 ```
 
 
+### Casts ###
+
+#### number->char ####
+
+(**number->char** *number*)
+
+Converts the number into the corresponding character.
+If the number isn't a valid unicode code point, the program terminates with an error.
+
+
+#### char->number ####
+
+(**char->number** *character*)
+
+Converts the character into the corresponding number.
+
+
 ### Predicates ###
 
 #### defined? ####
@@ -485,6 +520,8 @@ Checks if *expr* evaluates to a number.
 (number? x) -> #true
 (number? (+ 1 2)) -> #true
 (number? '(1)) -> #false
+(number? #c) -> #false
+(number? (char->number #c)) -> #true
 ```
 
 #### boolean? ####
@@ -502,6 +539,27 @@ Checks if *expr* evaluates to a boolean.
 (boolean? 1) -> #false
 (boolean? 0) -> #false
 ```
+
+
+#### char? ####
+
+(**char?** *expr*)
+
+Checks if *expr* evaluates to a character.
+
+```lisp
+(char? #c) -> #true
+(char? #1) -> #true
+(char? 1) -> #false
+(char? (number->char 40)) -> #true
+```
+
+#### valid-codepoint? ####
+
+(**valid-codepoint?** *number*)
+
+Checks if the number is a valid character.
+
 
 #### quote? ####
 

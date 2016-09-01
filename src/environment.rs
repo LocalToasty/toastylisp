@@ -34,12 +34,20 @@ impl Environment {
         env.insert(String::from("head"), Expr::new_builtin(BuiltinProc::Head));
         env.insert(String::from("tail"), Expr::new_builtin(BuiltinProc::Tail));
         env.insert(String::from("eval"), Expr::new_builtin(BuiltinProc::Eval));
+        env.insert(String::from("char->number"),
+                   Expr::new_builtin(BuiltinProc::CharToNumber));
+        env.insert(String::from("number->char"),
+                   Expr::new_builtin(BuiltinProc::NumberToChar));
         env.insert(String::from("defined?"),
                    Expr::new_builtin(BuiltinProc::IsDefined));
         env.insert(String::from("number?"),
                    Expr::new_builtin(BuiltinProc::IsNumber));
         env.insert(String::from("boolean?"),
                    Expr::new_builtin(BuiltinProc::IsBoolean));
+        env.insert(String::from("char?"),
+                   Expr::new_builtin(BuiltinProc::IsChar));
+        env.insert(String::from("valid-char?"),
+                   Expr::new_builtin(BuiltinProc::IsValidChar));
         env.insert(String::from("quote?"),
                    Expr::new_builtin(BuiltinProc::IsQuote));
         env.insert(String::from("lambda?"),

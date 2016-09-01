@@ -184,6 +184,12 @@ mod tests {
         let prog = "(tail (cons 1 2))";
         assert_eq!(*parse_and_eval(prog), Expr::Number(2));
 
+        let prog = "(char->number #a)";
+        assert_eq!(*parse_and_eval(prog), Expr::Number(0x61));
+
+        let prog = "(number->char 0x61)";
+        assert_eq!(*parse_and_eval(prog), Expr::Character('a'));
+
         let prog = "(defined? 'x)";
         assert_eq!(*parse_and_eval(prog), Expr::Boolean(false));
 
@@ -203,6 +209,15 @@ mod tests {
         assert_eq!(*parse_and_eval(prog), Expr::Boolean(true));
 
         let prog = "(boolean? #nil)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(false));
+
+        let prog = "(char? #c)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(true));
+
+        let prog = "(char? #\\u2764)";
+        assert_eq!(*parse_and_eval(prog), Expr::Boolean(true));
+
+        let prog = "(char? #nil)";
         assert_eq!(*parse_and_eval(prog), Expr::Boolean(false));
 
         let prog = "(quote? ''foo)";

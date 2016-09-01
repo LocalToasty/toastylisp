@@ -1,4 +1,5 @@
 use std::str;
+use std::char;
 use std::rc::Rc;
 use expression::Expr;
 use nom::*;
@@ -115,9 +116,10 @@ named!(list<&str, Rc<Expr> >,
               }));
 
 named!(literal<&str, Rc<Expr> >,
-       alt!(map!(number, |n| Expr::new_number(n)) |
-            map!(tag_s!("#nil"), |_| Expr::new_nil()) |
-            map!(boolean, |b| Expr::new_boolean(b))));
+       alt_complete!(map!(number, |n| Expr::new_number(n)) |
+                     map!(boolean, |b| Expr::new_boolean(b)) |
+                     map!(tag_s!("#nil"), |_| Expr::new_nil()) |
+                     map!(character, |c| Expr::new_character(c))));
 
 named!(number<&str, i32>,
        chain!(sign: opt!(alt!(tag_s!("+") |
@@ -131,10 +133,40 @@ named!(number<&str, i32>,
                   _ => abs
               }));
 
+named!(character<&str, char>,
+       preceded!(tag_s!("#"),
+                 alt_complete!(
+                     map!(tag_s!("\\t"), |_| '\t') |
+                     map!(tag_s!("\\n"), |_| '\n') |
+                     map!(tag_s!("\\r"), |_| '\r') |
+                     map!(tag_s!("\\\\"), |_| '\\') |
+                     map!(tag_s!("\\_"), |_| ' ') |
+                     map_opt!(map_res!(preceded!(tag_s!("\\u"), is_a_s!("0123456789abcdefABCDEF")),
+                                       |s| u32::from_str_radix(s, 16)),
+                              char::from_u32) |
+                     char_s
+                 )));
+
+fn char_s(input: &str) -> IResult<&str, char> {
+    let mut iter = input.char_indices();
+
+    let first = match iter.next() {
+        Some((_, c)) => c,
+        None => return IResult::Incomplete(Needed::Size(1)),
+    };
+
+    let char_boundary = match iter.next() {
+        Some((boundary, _)) => boundary,
+        None => return IResult::Done(&input[0..0], first),
+    };
+
+    let (_, rest) = input.split_at(char_boundary);
+    IResult::Done(rest, first)
+}
+
 named!(boolean<&str, bool>,
        alt!(map!(tag_s!("#true"), |_| true) |
             map!(tag_s!("#false"), |_| false)));
-
 
 named!(symbol<&str, Rc<Expr> >,
        map!(ident, Expr::new_symbol));
@@ -220,6 +252,30 @@ mod tests {
         assert_eq!(Expr::new_number(0xbeef), expr("0XBEEF").unwrap().1);
         // signed
         assert_eq!(Expr::new_number(-0xcafe), expr("-0xcafe").unwrap().1);
+    }
+
+    #[test]
+    fn parse_character() {
+        // ascii chars
+        assert_eq!(Expr::new_character('a'), expr("#a").unwrap().1);
+        assert_eq!(Expr::new_character('_'), expr("#_").unwrap().1);
+        assert_eq!(Expr::new_character('#'), expr("##").unwrap().1);
+
+        // special characters
+        assert_eq!(Expr::new_character('ä'), expr("#ä").unwrap().1);
+        assert_eq!(Expr::new_character('ß'), expr("#ß").unwrap().1);
+        assert_eq!(Expr::new_character('λ'), expr("#λ").unwrap().1);
+        assert_eq!(Expr::new_character('💖'), expr("#💖").unwrap().1);
+
+        // escape sequences
+        assert_eq!(Expr::new_character('\t'), expr("#\\t").unwrap().1);
+        assert_eq!(Expr::new_character('\n'), expr("#\\n").unwrap().1);
+        assert_eq!(Expr::new_character('\r'), expr("#\\r").unwrap().1);
+        assert_eq!(Expr::new_character('\\'), expr("#\\\\").unwrap().1);
+        assert_eq!(Expr::new_character(' '), expr("#\\_").unwrap().1);
+
+        // unicode escapes
+        assert_eq!(Expr::new_character('\u{2764}'), expr("#\\u2764").unwrap().1);
     }
 
     #[test]

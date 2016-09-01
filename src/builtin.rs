@@ -1,3 +1,4 @@
+use std::char;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt;
@@ -37,12 +38,20 @@ pub enum BuiltinProc {
     Tail,
     /// Evaluate a quoted expression.
     Eval,
+    /// Convert char into a number.
+    CharToNumber,
+    /// Convert number into a char.
+    NumberToChar,
     /// Check if expression evaluates to a defined symbol.
     IsDefined,
     /// Check if expression evaluates to a number.
     IsNumber,
     /// Check if expression evaluates to a boolean.
     IsBoolean,
+    /// Check if expression evaluates to a char.
+    IsChar,
+    /// Check if number is a valid unicode code point.
+    IsValidChar,
     /// Check if expression evaluates to a quotation.
     IsQuote,
     /// Check if expression evaluates to a lambda.
@@ -77,9 +86,13 @@ impl BuiltinProc {
             BuiltinProc::Head |
             BuiltinProc::Tail |
             BuiltinProc::Eval |
+            BuiltinProc::NumberToChar |
+            BuiltinProc::CharToNumber |
             BuiltinProc::IsDefined |
             BuiltinProc::IsNumber |
             BuiltinProc::IsBoolean |
+            BuiltinProc::IsChar |
+            BuiltinProc::IsValidChar |
             BuiltinProc::IsQuote |
             BuiltinProc::IsLambda |
             BuiltinProc::IsPair |
@@ -123,6 +136,7 @@ impl BuiltinProc {
             BuiltinProc::Cons => BuiltinProc::eval_cons(args),
             BuiltinProc::Head | BuiltinProc::Tail => self.eval_head_tail(args),
             BuiltinProc::Eval => eval(&args[0], env),
+            BuiltinProc::CharToNumber | BuiltinProc::NumberToChar => self.cast(&args[0]),
             BuiltinProc::IsDefined => {
                 if let Expr::Symbol(ref name) = *args[0] {
                     if env.borrow().is_defined(name) {
@@ -155,6 +169,13 @@ impl BuiltinProc {
                     _ => Ok(Expr::new_boolean(false)),
                 }
             }
+            BuiltinProc::IsChar => {
+                match *args[0] {
+                    Expr::Character(_) => Ok(Expr::new_boolean(true)),
+                    _ => Ok(Expr::new_boolean(false)),
+                }
+            }
+            BuiltinProc::IsValidChar => BuiltinProc::eval_is_char(&args[0]),
             BuiltinProc::IsLambda => {
                 match *args[0] {
                     Expr::Lambda{..} => Ok(Expr::new_boolean(true)),
@@ -347,9 +368,49 @@ impl BuiltinProc {
         }
     }
 
+    fn cast(&self, arg: &Rc<Expr>) -> EvalRes {
+        match *self {
+            BuiltinProc::CharToNumber => {
+                match **arg {
+                    Expr::Character(c) => Ok(Expr::new_number(c as i32)),
+                    _ => {
+                        Err(EvalErr::TypeErr {
+                            expected: Type::Character,
+                            found: arg.get_type(),
+                        })
+                    }
+                }
+            }
+            BuiltinProc::NumberToChar => {
+                match **arg {
+                    Expr::Number(n) => Ok(Expr::new_character(char::from_u32(n as u32).unwrap())),
+                    _ => {
+                        Err(EvalErr::TypeErr {
+                            expected: Type::Number,
+                            found: arg.get_type(),
+                        })
+                    }
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn eval_is_char(arg: &Rc<Expr>) -> EvalRes {
+        match **arg {
+            Expr::Number(n) => Ok(Expr::new_boolean(char::from_u32(n as u32).is_some())),
+            _ => {
+                Err(EvalErr::TypeErr {
+                    expected: Type::Number,
+                    found: arg.get_type(),
+                })
+            }
+        }
+    }
+
     fn eval_print(args: Vec<Rc<Expr>>) -> EvalRes {
-        for arg in args {
-            println!("{}", arg);
+        for arg in args[0].iter() {
+            print!("{}", try!(arg));
         }
         Ok(Expr::new_nil())
     }
@@ -377,10 +438,14 @@ impl fmt::Display for BuiltinProc {
             BuiltinProc::Head => write!(f, "builtin.head"),
             BuiltinProc::Tail => write!(f, "builtin.tail"),
             BuiltinProc::Eval => write!(f, "builtin.eval"),
+            BuiltinProc::CharToNumber => write!(f, "builtin.char->number"),
+            BuiltinProc::NumberToChar => write!(f, "builtin.number->char"),
             BuiltinProc::IsDefined => write!(f, "builtin.defined?"),
             BuiltinProc::IsQuote => write!(f, "builtin.quote?"),
             BuiltinProc::IsNumber => write!(f, "builtin.number?"),
             BuiltinProc::IsBoolean => write!(f, "builtin.boolean?"),
+            BuiltinProc::IsChar => write!(f, "builtin.char?"),
+            BuiltinProc::IsValidChar => write!(f, "builtin.valid-char?"),
             BuiltinProc::IsLambda => write!(f, "builtin.lambda?"),
             BuiltinProc::IsPair => write!(f, "builtin.pair?"),
             BuiltinProc::IsNil => write!(f, "builtin.nil?"),
