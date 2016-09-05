@@ -1,23 +1,25 @@
 use std::rc::Rc;
+use std::cell::RefCell;
 use std::fmt;
+use std::iter;
 use environment::Environment;
-use intrinsic::IntrinsicProc;
+use builtin::BuiltinProc;
 
 /// Lisp expressions
-#[derive(PartialEq,Debug)]
+#[derive(PartialEq,Debug,Clone)]
 pub enum Expr {
     Symbol(String),
     Quote(Rc<Expr>),
     Pair(Rc<Expr>, Rc<Expr>),
     If(Rc<Expr>, Rc<Expr>, Rc<Expr>),
-    Cond(Vec<(Rc<Expr>, Rc<Expr>)>, Option<Rc<Expr>>),
+    Cond(Vec<(Rc<Expr>, Rc<Expr>)>),
     Number(i32),
-    Intrinsic(IntrinsicProc),
-    Lambda(Vec<String>, Rc<Expr>, Option<Rc<Environment>>),
+    Boolean(bool),
+    Builtin(BuiltinProc),
+    Lambda(Vec<String>, Rc<Expr>, Option<Rc<RefCell<Environment>>>),
     Define(String, Rc<Expr>),
     Let(Vec<(String, Rc<Expr>)>, Rc<Expr>),
     Sequence(Vec<Rc<Expr>>),
-    True,
     Nil,
 }
 
@@ -44,8 +46,8 @@ impl Expr {
         Rc::new(Expr::If(pred, cons, alt))
     }
 
-    pub fn new_cond(cases: Vec<(Rc<Expr>, Rc<Expr>)>, alt: Option<Rc<Expr>>) -> Rc<Expr> {
-        Rc::new(Expr::Cond(cases, alt))
+    pub fn new_cond(cases: Vec<(Rc<Expr>, Rc<Expr>)>) -> Rc<Expr> {
+        Rc::new(Expr::Cond(cases))
     }
 
     pub fn new_number(num: i32) -> Rc<Expr> {
@@ -53,10 +55,10 @@ impl Expr {
     }
 
     /// Creates a new intrinsic procedure, wrapped in a lambda.
-    pub fn new_intrinsic(procedure: IntrinsicProc) -> Rc<Expr> {
+    pub fn new_builtin(procedure: BuiltinProc) -> Rc<Expr> {
         let params: Vec<_> = (0..procedure.param_no()).map(|i| format!("x{}", i)).collect();
         Expr::new_lambda(params.clone(),
-                         Expr::new_pair(Rc::new(Expr::Intrinsic(procedure)),
+                         Expr::new_pair(Rc::new(Expr::Builtin(procedure)),
                                         Expr::new_list(params.iter()
                                                              .map(|name| {
                                                                  Rc::new(Expr::Symbol(name.clone()))
@@ -65,7 +67,10 @@ impl Expr {
                          None)
     }
 
-    pub fn new_lambda(args: Vec<String>, body: Rc<Expr>, env: Option<Rc<Environment>>) -> Rc<Expr> {
+    pub fn new_lambda(args: Vec<String>,
+                      body: Rc<Expr>,
+                      env: Option<Rc<RefCell<Environment>>>)
+                      -> Rc<Expr> {
         Rc::new(Expr::Lambda(args, body, env))
     }
 
@@ -81,12 +86,29 @@ impl Expr {
         Rc::new(Expr::Sequence(exprs))
     }
 
-    pub fn new_true() -> Rc<Expr> {
-        Rc::new(Expr::True)
+    pub fn new_boolean(val: bool) -> Rc<Expr> {
+        Rc::new(Expr::Boolean(val))
     }
 
     pub fn new_nil() -> Rc<Expr> {
         Rc::new(Expr::Nil)
+    }
+
+    pub fn get_type(&self) -> Type {
+        match *self {
+            Expr::Symbol(_) => Type::Symbol,
+            Expr::Quote(_) => Type::Quote,
+            Expr::Pair(..) => Type::Pair,
+            Expr::Number(_) => Type::Number,
+            Expr::Boolean(_) => Type::Boolean,
+            Expr::Lambda(..) => Type::Lambda,
+            Expr::Nil => Type::Nil,
+            _ => Type::Expr,
+        }
+    }
+
+    fn iter(&self) -> LispListIter {
+        LispListIter { list: Rc::new((*self).clone()) }
     }
 }
 
@@ -98,30 +120,31 @@ impl fmt::Display for Expr {
             Expr::Pair(ref head, ref tail) => {
                 try!(write!(f, "({}", head));
                 let mut remainder = tail;
+                // as long as the pairs resemble a linked list, render them as such
                 while let Expr::Pair(ref head, ref tail) = **remainder {
                     try!(write!(f, " {}", head));
                     remainder = tail;
                 }
+
+                // if the last element is a nil, render it as a list, otherwise as a pair
                 if let Expr::Nil = **remainder {
                     write!(f, ")")
                 } else {
-                    write!(f, "{})", remainder)
+                    write!(f, " . {})", remainder)
                 }
             }
 
             Expr::If(ref pred, ref cons, ref alt) => write!(f, "(if {} {} {})", *pred, *cons, *alt),
-            Expr::Cond(ref cases, ref alt) => {
+            Expr::Cond(ref cases) => {
                 try!(write!(f, "(cond"));
                 for case in cases {
                     let (ref pred, ref cons) = *case;
                     try!(write!(f, " ({} {})", pred, cons));
                 }
-                if let Some(ref expr) = *alt {
-                    try!(write!(f, " {}", expr));
-                }
                 write!(f, ")")
             }
             Expr::Number(val) => write!(f, "{}", val),
+            Expr::Boolean(val) => write!(f, "#{}", val),
             Expr::Lambda(ref params, ref body, _) => {
                 try!(write!(f, "(lambda ("));
                 if !params.is_empty() {
@@ -133,7 +156,7 @@ impl fmt::Display for Expr {
                 write!(f, ") {})", body)
 
             }
-            Expr::Intrinsic(ref procedure) => write!(f, "{}", procedure),
+            Expr::Builtin(ref procedure) => write!(f, "{}", procedure),
             Expr::Define(ref name, ref expr) => write!(f, "(define {} {})", name, *expr),
             Expr::Let(ref defs, ref body) => {
                 try!(write!(f, "(let ("));
@@ -149,8 +172,60 @@ impl fmt::Display for Expr {
                 }
                 write!(f, ")")
             }
-            Expr::True => write!(f, "true"),
-            Expr::Nil => write!(f, "nil"),
+            Expr::Nil => write!(f, "#nil"),
+        }
+    }
+}
+
+pub struct LispListIter {
+    list: Rc<Expr>,
+}
+
+impl iter::Iterator for LispListIter {
+    type Item = Result<Rc<Expr>, EvalErr>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match *self.list.clone() {
+            Expr::Pair(ref head, ref tail) => {
+                let tail = tail.clone();
+                self.list = tail;
+                Some(Ok(head.clone()))
+            }
+            Expr::Nil => None,
+            _ => {
+                Some(Err(EvalErr::TypeErr {
+                    expected: Type::Pair,
+                    found: self.list.get_type(),
+                }))
+            }
+        }
+    }
+}
+
+
+#[derive(PartialEq,Debug,Clone,Copy)]
+pub enum Type {
+    Symbol,
+    Quote,
+    Pair,
+    Number,
+    Boolean,
+    Lambda,
+    Nil,
+    Expr,
+}
+
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Type::Symbol => write!(f, "symbol"),
+            Type::Quote => write!(f, "quote"),
+            Type::Pair => write!(f, "pair"),
+            Type::Number => write!(f, "number"),
+            Type::Boolean => write!(f, "boolean"),
+            Type::Lambda => write!(f, "lambda"),
+            Type::Nil => write!(f, "nil"),
+            Type::Expr => write!(f, "expression"),
         }
     }
 }
@@ -158,8 +233,10 @@ impl fmt::Display for Expr {
 #[derive(Debug)]
 pub enum EvalErr {
     UndefinedSymbol(String),
-    TypeErr,
-    ArgListExpected,
+    TypeErr {
+        expected: Type,
+        found: Type,
+    },
     ProcExpected,
     TooManyArgs {
         expected: usize,
@@ -169,50 +246,99 @@ pub enum EvalErr {
     NonExhaustivePattern,
 }
 
+impl fmt::Display for EvalErr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            EvalErr::UndefinedSymbol(ref symb) => write!(f, "Undefined symbol: {}", symb),
+            EvalErr::TypeErr { expected: ex, found: fo } => {
+                write!(f, "Type error: Expected {}, found {}", ex, fo)
+            }
+            EvalErr::ProcExpected => write!(f, "Expected procedure"),
+            EvalErr::TooManyArgs { expected: ex, found: fo } => {
+                write!(f, "Too many arguments: Expected {}, found {}", ex, fo)
+            }
+            EvalErr::Redefinition(ref symb) => write!(f, "Redefinition of symbol '{}'", symb),
+            EvalErr::NonExhaustivePattern => write!(f, "Non-exhaustive pattern"),
+        }
+    }
+}
+
 pub type EvalRes = Result<Rc<Expr>, EvalErr>;
+
+enum PartialEvalRes {
+    /// Evaluation completed.
+    Done(Rc<Expr>),
+    /// Evaluation is not yet complete, a tail call has to be made.
+    TailCall(Rc<Expr>, Vec<Rc<Expr>>),
+    /// Evaluation error.
+    Err(EvalErr),
+}
+
+impl PartialEvalRes {
+    fn from_eval_res(res: EvalRes) -> PartialEvalRes {
+        match res {
+            Ok(expr) => PartialEvalRes::Done(expr),
+            Err(err) => PartialEvalRes::Err(err),
+        }
+    }
+}
+
+pub fn eval(expr: &Rc<Expr>, env: &Rc<RefCell<Environment>>) -> EvalRes {
+    let mut res = eval_partially(expr, env);
+
+    loop {
+        match res {
+            PartialEvalRes::TailCall(procedure, args) => res = apply_procedure(&procedure, args),
+            PartialEvalRes::Done(expr) => return Ok(expr),
+            PartialEvalRes::Err(err) => return Err(err),
+        }
+    }
+}
 
 /// Evaluates an expression.
 ///
 /// # Errors
 ///
 /// Returns an error if the expression is semantically incorrect.
-pub fn eval(expr: &Rc<Expr>, env: &Rc<Environment>) -> EvalRes {
+fn eval_partially(expr: &Rc<Expr>, env: &Rc<RefCell<Environment>>) -> PartialEvalRes {
     let res = match **expr {
         Expr::Symbol(ref symbol) => {
             // If a symbol is read, return its value.
             // In case of its a lambda, it has to be evaluated again in order to potentially bind
             // its environment.
-            match env.get(symbol) {
+            match env.borrow().get(symbol) {
                 Some(expr) => {
                     match *expr {
-                        Expr::Lambda(..) => eval(&expr, env),
-                        _ => Ok(expr.clone()),
+                        Expr::Lambda(..) => eval_partially(&expr, env),
+                        _ => PartialEvalRes::Done(expr.clone()),
                     }
                 }
-                _ => Err(EvalErr::UndefinedSymbol(symbol.clone())),
+                _ => PartialEvalRes::Err(EvalErr::UndefinedSymbol(symbol.clone())),
             }
         }
-        Expr::Quote(ref e) => Ok(e.clone()),
+        Expr::Quote(ref e) => PartialEvalRes::Done(e.clone()),
         Expr::Pair(ref head, ref tail) => eval_pair(head, tail, env),
         Expr::If(ref pred, ref cons, ref alt) => eval_if(pred, cons, alt, env),
-        Expr::Cond(ref cases, ref alt) => eval_cond(cases, alt, env),
-        Expr::Define(_, ref expr) => eval(expr, env),
+        Expr::Cond(ref cases) => eval_cond(cases, env),
+        Expr::Define(_, ref expr) => eval_partially(expr, env),
         Expr::Let(ref defs, ref body) => eval_let(defs, body, env.clone()),
         Expr::Lambda(ref params, ref body, ref lambda_env) => {
             // If the lambda is not bound to an environment yet, bind it to the current environment.
             // This way variables from this environment are captured.
-            match *lambda_env {
-                None => Ok(Expr::new_lambda(params.clone(), body.clone(), Some(env.clone()))),
-                _ => Ok(expr.clone()),
-            }
+            let res = match *lambda_env {
+                None => Expr::new_lambda(params.clone(), body.clone(), Some(env.clone())),
+                _ => expr.clone(),
+
+            };
+            PartialEvalRes::Done(res)
         }
         Expr::Sequence(ref exprs) => eval_sequence(exprs, env.clone()),
         // every other expression is self-evaluating
-        _ => Ok(expr.clone()),
+        _ => PartialEvalRes::Done(expr.clone()),
     };
 
     // if an error occurred, print a the backtrace
-    if let Err(_) = res {
+    if let PartialEvalRes::Err(_) = res {
         println!("\tin {}", **expr);
     }
 
@@ -230,69 +356,77 @@ pub fn eval(expr: &Rc<Expr>, env: &Rc<Environment>) -> EvalRes {
 /// Returns EvalErr::ProcExpected, if the first element of the list isn't a procedure (i.e. either a
 /// lambda or an intrinsic procedure).  If the tail of the pair does not resemble a list,
 /// EvalErr::ArgListExpected is returned.
-fn eval_pair(head: &Rc<Expr>, tail: &Expr, env: &Rc<Environment>) -> EvalRes {
-    let first = try!(eval(head, env));
+fn eval_pair(head: &Rc<Expr>, tail: &Expr, env: &Rc<RefCell<Environment>>) -> PartialEvalRes {
+    let first = match eval(head, env) {
+        Ok(expr) => expr,
+        Err(err) => return PartialEvalRes::Err(err),
+    };
+
     match *first {
-        Expr::Lambda(ref params, ref body, ref lambda_env) => {
+        Expr::Lambda(ref params, _, _) => {
             // collect arguments and map them to the parameters
-            let args = try!(collect_list(tail));
+            let args: Vec<_> = match tail.iter().collect() {
+                Ok(args) => args,
+                Err(err) => return PartialEvalRes::Err(err),
+            };
 
             // check the number of arguments given
             if args.len() > params.len() {
                 // too many arguments
-                Err(EvalErr::TooManyArgs {
+                PartialEvalRes::Err(EvalErr::TooManyArgs {
                     found: args.len(),
                     expected: params.len(),
                 })
             } else {
-                // add arguments to environment
-                let mut lambda_env = Environment::new_scope(lambda_env.clone().unwrap());
-                let defs = params.iter()
-                                 .zip(args.iter())
-                                 .map(|(param, arg)| (param.clone(), arg.clone()));
-                for (param, arg) in defs {
-                    lambda_env.insert(param, try!(eval(&arg, env)));
+                let mut evaled_args = Vec::new();
+                for arg in args {
+                    match eval(&arg, env) {
+                        Ok(expr) => evaled_args.push(expr),
+                        Err(err) => return PartialEvalRes::Err(err),
+                    };
                 }
-                let lambda_env = Rc::new(lambda_env);
-
-                if args.len() == params.len() {
-                    // correct amount of arguments, evaluate body
-                    eval(&body, &lambda_env)
-                } else {
-                    // too few arguments were given; return curried lambda
-                    let remaining_params = params[args.len()..].to_vec();
-                    Ok(Expr::new_lambda(remaining_params, body.clone(), Some(lambda_env)))
-                }
+                PartialEvalRes::TailCall(first.clone(), evaled_args)
             }
         }
-        // intrinsic functions are wrapped in lambdas, thus it is not necassary to do any argument
+        // built in functions are wrapped in lambdas, thus it is not necassary to do any argument
         // number checking / currying
-        Expr::Intrinsic(ref procedure) => {
+        Expr::Builtin(ref procedure) => {
             // collect arguments and map them to the parameters
-            let args = try!(collect_list(tail));
-            procedure.apply(&args, env)
+            match tail.iter().collect() {
+                Ok(args) => PartialEvalRes::from_eval_res(procedure.eval(&args, env)),
+                Err(err) => PartialEvalRes::Err(err),
+            }
         }
-        _ => Err(EvalErr::ProcExpected),
+        _ => PartialEvalRes::Err(EvalErr::ProcExpected),
     }
 }
 
-/// Transforms a Lisp list into a vector.
-///
-/// # Errors
-///
-/// Returns an EvalErr::ArgListExpected, if list is not a list.
-fn collect_list(mut list: &Expr) -> Result<Vec<Rc<Expr>>, EvalErr> {
-    let mut res = Vec::new();
+fn apply_procedure(procedure: &Rc<Expr>, args: Vec<Rc<Expr>>) -> PartialEvalRes {
+    let (params, body, lambda_env) = match **procedure {
+        Expr::Lambda(ref params, ref body, ref env) => (params, body, env),
+        _ => unreachable!(),
+    };
 
-    loop {
-        match *list {
-            Expr::Nil => return Ok(res),
-            Expr::Pair(ref head, ref tail) => {
-                res.push(head.clone());
-                list = tail;
-            }
-            _ => return Err(EvalErr::ArgListExpected),
+    // add arguments to environment
+    let lambda_scope = Environment::new_scope(lambda_env.clone().unwrap());
+    {
+        let mut borrowed_lambda_scope = lambda_scope.borrow_mut();
+
+        let defs = params.iter()
+                         .zip(args.iter())
+                         .map(|(param, arg)| (param.clone(), arg.clone()));
+        for (param, arg) in defs {
+            borrowed_lambda_scope.insert(param, arg);
         }
+    }
+
+    if args.len() == params.len() {
+        // correct amount of arguments, evaluate body
+        eval_partially(&body, &lambda_scope)
+    } else {
+        // too few arguments were given; return curried lambda
+        let remaining_params = params[args.len()..].to_vec();
+        PartialEvalRes::Done(Expr::new_lambda(remaining_params, body.clone(), Some(lambda_scope)))
     }
 }
 
@@ -300,11 +434,30 @@ fn collect_list(mut list: &Expr) -> Result<Vec<Rc<Expr>>, EvalErr> {
 ///
 /// If pred evaluates to something other than Expr::Nil, then the result of cons is returned.
 /// Otherwise alt will be evaluated.
-fn eval_if(pred: &Rc<Expr>, cons: &Rc<Expr>, alt: &Rc<Expr>, env: &Rc<Environment>) -> EvalRes {
-    if *try!(eval(&pred, env)) != Expr::Nil {
-        eval(&cons, env)
-    } else {
-        eval(&alt, env)
+fn eval_if(pred: &Rc<Expr>,
+           cons: &Rc<Expr>,
+           alt: &Rc<Expr>,
+           env: &Rc<RefCell<Environment>>)
+           -> PartialEvalRes {
+    match eval(pred, env) {
+        Ok(expr) => {
+            match *expr {
+                Expr::Boolean(val) => {
+                    if val {
+                        eval_partially(cons, env)
+                    } else {
+                        eval_partially(alt, env)
+                    }
+                }
+                _ => {
+                    PartialEvalRes::Err(EvalErr::TypeErr {
+                        expected: Type::Boolean,
+                        found: expr.get_type(),
+                    })
+                }
+            }
+        }
+        Err(err) => PartialEvalRes::Err(err),
     }
 }
 
@@ -312,24 +465,33 @@ fn eval_if(pred: &Rc<Expr>, cons: &Rc<Expr>, alt: &Rc<Expr>, env: &Rc<Environmen
 ///
 /// # Errors
 ///
-/// If none of the predicates evaluate to a value different from nil, and no alt expression is
-/// given, EvalErr::NonExhaustivePattern is returned.
-fn eval_cond(cases: &Vec<(Rc<Expr>, Rc<Expr>)>,
-             alt: &Option<Rc<Expr>>,
-             env: &Rc<Environment>)
-             -> EvalRes {
+/// If none of the predicates evaluate to a value different from nil, EvalErr::NonExhaustivePattern
+/// is returned.
+fn eval_cond(cases: &Vec<(Rc<Expr>, Rc<Expr>)>, env: &Rc<RefCell<Environment>>) -> PartialEvalRes {
     for case in cases {
         let (ref pred, ref cons) = *case;
-        if *try!(eval(&pred, env)) != Expr::Nil {
-            return eval(&cons, env);
+
+        match eval(pred, env) {
+            Ok(expr) => {
+                match *expr {
+                    Expr::Boolean(val) => {
+                        if val {
+                            return eval_partially(cons, env);
+                        }
+                    }
+                    _ => {
+                        return PartialEvalRes::Err(EvalErr::TypeErr {
+                            expected: Type::Boolean,
+                            found: expr.get_type(),
+                        })
+                    }
+                }
+            }
+            Err(err) => return PartialEvalRes::Err(err),
         }
     }
 
-    if let Some(ref expr) = *alt {
-        eval(expr, env)
-    } else {
-        Err(EvalErr::NonExhaustivePattern)
-    }
+    PartialEvalRes::Err(EvalErr::NonExhaustivePattern)
 }
 
 /// Evaluates a let expression.
@@ -337,26 +499,32 @@ fn eval_cond(cases: &Vec<(Rc<Expr>, Rc<Expr>)>,
 /// # Errors
 ///
 /// Returns EvalErr::Redefinition if a symbol is defined twice.
-fn eval_let(defs: &Vec<(String, Rc<Expr>)>, body: &Rc<Expr>, env: Rc<Environment>) -> EvalRes {
-    let mut let_env = Environment::new_scope(env);
+fn eval_let(defs: &Vec<(String, Rc<Expr>)>,
+            body: &Rc<Expr>,
+            env: Rc<RefCell<Environment>>)
+            -> PartialEvalRes {
+    let let_env = Environment::new_scope(env);
 
     // Add definitions to environment
     for def in defs {
         let (ref name, ref expr) = *def;
-        if !let_env.locally_defined(&name) {
-            let mut res = try!(eval(&expr, &Rc::new(let_env.clone())));
-            if let Expr::Lambda(..) = *res {
-                // capture lambda args
-                let_env.insert(name.clone(), expr.clone());
-                res = try!(eval(&expr, &Rc::new(let_env.clone())));
+
+        // check if the symbol wasn't defined in this scope before
+        let already_defined = !let_env.borrow().locally_defined(name);
+        if already_defined {
+            match eval(&expr, &let_env) {
+                Ok(res) => let_env.borrow_mut().insert(name.clone(), res.clone()),
+                Err(err) => return PartialEvalRes::Err(err),
             }
-            let_env.insert(name.clone(), res.clone());
         } else {
-            return Err(EvalErr::Redefinition(name.clone()));
+            return PartialEvalRes::Err(EvalErr::Redefinition(name.clone()));
         }
     }
 
-    eval(body, &Rc::new(let_env))
+    match **body {
+        Expr::Pair(..) => eval_partially(body, &let_env),
+        _ => PartialEvalRes::from_eval_res(eval(body, &let_env)),
+    }
 }
 
 /// Evaluates a sequence of expressions.
@@ -364,42 +532,48 @@ fn eval_let(defs: &Vec<(String, Rc<Expr>)>, body: &Rc<Expr>, env: Rc<Environment
 /// # Errors
 ///
 /// Returns EvalErr::Redefinition if a symbol is defined twice.
-fn eval_sequence(exprs: &Vec<Rc<Expr>>, env: Rc<Environment>) -> EvalRes {
-    let mut seq_env = Environment::new_scope(env);
+fn eval_sequence(exprs: &Vec<Rc<Expr>>, env: Rc<RefCell<Environment>>) -> PartialEvalRes {
+    let seq_env = Environment::new_scope(env);
     let (last, inits) = exprs.split_last().unwrap();
     for expr in inits {
         match **expr {
             Expr::Define(ref name, ref expr) => {
-                if !seq_env.locally_defined(name) {
-                    let mut res = try!(eval(expr, &Rc::new(seq_env.clone())));
-                    if let Expr::Lambda(..) = *res {
-                        seq_env.insert(name.clone(), expr.clone());
-                        res = try!(eval(&expr, &Rc::new(seq_env.clone())));
+                let already_defined = !seq_env.borrow().locally_defined(name);
+                if already_defined {
+                    match eval(expr, &seq_env) {
+                        Ok(res) => seq_env.borrow_mut().insert(name.clone(), res.clone()),
+                        Err(err) => return PartialEvalRes::Err(err),
                     }
-                    seq_env.insert(name.clone(), res.clone());
                 } else {
-                    return Err(EvalErr::Redefinition(name.clone()));
+                    return PartialEvalRes::Err(EvalErr::Redefinition(name.clone()));
                 }
             }
             _ => {
-                try!(eval(expr, &Rc::new(seq_env.clone())));
+                if let Err(err) = eval(expr, &seq_env) {
+                    return PartialEvalRes::Err(err);
+                }
             }
         }
     }
-    eval(last, &Rc::new(seq_env.clone()))
+
+    match **last {
+        Expr::Pair(..) => eval_partially(last, &seq_env),
+        _ => PartialEvalRes::from_eval_res(eval(last, &seq_env)),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::rc::Rc;
+    use std::cell::RefCell;
     use environment::Environment;
-    use intrinsic::IntrinsicProc;
+    use builtin::BuiltinProc;
     use super::*;
 
     /// Checks if self-evaluating expressions evaluate to themselves.
     #[test]
     fn eval_self_evaluating() {
-        let env = Rc::new(Environment::new());
+        let env = Rc::new(RefCell::new(Environment::new()));
 
         let number = Expr::new_number(5);
         assert_eq!(number, eval(&number, &env).unwrap());
@@ -407,12 +581,12 @@ mod tests {
 
     #[test]
     fn eval_if() {
-        let env = Rc::new(Environment::new());
+        let env = Rc::new(RefCell::new(Environment::new()));
         let res = Expr::new_symbol("expected");
 
         // predicate not nil
         assert_eq!(res,
-                   eval(&Expr::new_if(Expr::new_number(0),
+                   eval(&Expr::new_if(Expr::new_boolean(true),
                                       Expr::new_quote(res.clone()),
                                       Expr::new_nil()),
                         &env)
@@ -420,7 +594,7 @@ mod tests {
 
         // predicate nil
         assert_eq!(res,
-                   eval(&Expr::new_if(Expr::new_nil(),
+                   eval(&Expr::new_if(Expr::new_boolean(false),
                                       Expr::new_nil(),
                                       Expr::new_quote(res.clone())),
                         &env)
@@ -429,12 +603,12 @@ mod tests {
 
     #[test]
     fn eval_eq() {
-        let env = Rc::new(Environment::new());
+        let env = Rc::new(RefCell::new(Environment::new()));
         let x = Expr::new_number(5);
         let y = Expr::new_number(5);
 
-        assert_eq!(Expr::True,
-                   *eval(&Expr::new_list(vec![Expr::new_intrinsic(IntrinsicProc::Eq), x, y]),
+        assert_eq!(Expr::Boolean(true),
+                   *eval(&Expr::new_list(vec![Expr::new_builtin(BuiltinProc::Eq), x, y]),
                          &env)
                         .unwrap());
     }

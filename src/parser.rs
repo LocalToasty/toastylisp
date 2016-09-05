@@ -18,7 +18,7 @@ named!(expr<Rc<Expr> >,
                       define |
                       lambda |
                       list |
-                      number |
+                      literal |
                       symbol)));
 
 named!(quote<Rc<Expr> >,
@@ -44,9 +44,9 @@ named!(cond<Rc<Expr> >,
                                    cons: expr ~ opt!(multispace) ~
                                    char!(')'),
                                    || (pred, cons))) ~
-              alt: opt!(expr) ~ opt!(multispace) ~
+              opt!(multispace) ~
               char!(')'),
-              || Expr::new_cond(cases, alt)));
+              || Expr::new_cond(cases)));
 
 named!(let_expr<Rc<Expr> >,
        chain!(char!('(') ~ opt!(multispace) ~
@@ -107,19 +107,28 @@ named!(list<Rc<Expr> >,
                   list
               }));
 
+named!(literal<Rc<Expr> >,
+       alt!(map!(number, |n| Expr::new_number(n)) |
+            map!(boolean, |b| Expr::new_boolean(b)) |
+            map!(tag!("#nil"), |_| Expr::new_nil())));
+
 named!(positive_number<i32>,
        map_res!(map_res!(digit,
                          str::from_utf8),
                 FromStr::from_str));
 
-named!(number<Rc<Expr> >,
+named!(number<i32>,
        chain!(sign: opt!(alt!(char!('+') |
                               char!('-'))) ~
               abs: positive_number,
-              || Expr::new_number(match sign {
+              || match sign {
                   Some('-') => 0 - abs,
                   _ => abs
-              })));
+              }));
+
+named!(boolean<bool>,
+       alt!(map!(tag!("#true"), |_| true) |
+            map!(tag!("#false"), |_| false)));
 
 named!(symbol<Rc<Expr> >,
        map!(ident, Expr::new_symbol));
@@ -135,7 +144,7 @@ fn ident(input: &[u8]) -> IResult<&[u8], &str> {
 
     let first = input[0] as char;
     if first.is_whitespace() || first.is_numeric() || first == '(' || first == ')' ||
-       first == '\'' {
+       first == '\'' || first == '#' {
         return IResult::Error(Err::Code(ErrorKind::Custom(0x1010)));
     }
 
@@ -148,6 +157,31 @@ fn ident(input: &[u8]) -> IResult<&[u8], &str> {
         len += 1;
     }
     return IResult::Done(&input[len..], str::from_utf8(&input[0..len]).unwrap());
+}
+
+/// Removes all comments from a string.
+pub fn remove_comments(input: &str) -> Vec<u8> {
+    let mut res = Vec::new();
+
+    for line in input.lines() {
+        for b in line.bytes() {
+            if b == ';' as u8 {
+                break;
+            }
+
+            res.push(b);
+        }
+    }
+
+    // remove trailing whitespace
+    while let Some(c) = res.pop() {
+        let c = c as char;
+        if !(c == '\n' || c == '\r' || c == '\t' || c == ' ') {
+            res.push(c as u8);
+            break;
+        }
+    }
+    res
 }
 
 #[cfg(test)]
