@@ -157,7 +157,7 @@ impl BuiltinProc {
             }
             BuiltinProc::IsLambda => {
                 match *args[0] {
-                    Expr::Lambda(..) => Ok(Expr::new_boolean(true)),
+                    Expr::Lambda{..} => Ok(Expr::new_boolean(true)),
                     _ => Ok(Expr::new_boolean(false)),
                 }
             }

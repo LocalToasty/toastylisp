@@ -12,12 +12,21 @@ pub enum Expr {
     Quote(Rc<Expr>),
     Pair(Rc<Expr>, Rc<Expr>),
     Placeholder,
-    If(Rc<Expr>, Rc<Expr>, Rc<Expr>),
+    If {
+        pred: Rc<Expr>,
+        cons: Rc<Expr>,
+        alt: Rc<Expr>,
+    },
     Cond(Vec<(Rc<Expr>, Rc<Expr>)>),
     Number(i32),
     Boolean(bool),
     Builtin(BuiltinProc),
-    Lambda(Vec<String>, bool, Rc<Expr>, Option<Rc<RefCell<Environment>>>),
+    Lambda {
+        params: Vec<String>,
+        variadic: bool,
+        body: Rc<Expr>,
+        env: Option<Rc<RefCell<Environment>>>,
+    },
     Define(String, Rc<Expr>),
     Let(Vec<(String, Rc<Expr>)>, Rc<Expr>),
     Sequence(Vec<Rc<Expr>>),
@@ -48,7 +57,11 @@ impl Expr {
     }
 
     pub fn new_if(pred: Rc<Expr>, cons: Rc<Expr>, alt: Rc<Expr>) -> Rc<Expr> {
-        Rc::new(Expr::If(pred, cons, alt))
+        Rc::new(Expr::If {
+            pred: pred,
+            cons: cons,
+            alt: alt,
+        })
     }
 
     pub fn new_cond(cases: Vec<(Rc<Expr>, Rc<Expr>)>) -> Rc<Expr> {
@@ -73,12 +86,17 @@ impl Expr {
                          None)
     }
 
-    pub fn new_lambda(args: Vec<String>,
+    pub fn new_lambda(params: Vec<String>,
                       variadic: bool,
                       body: Rc<Expr>,
                       env: Option<Rc<RefCell<Environment>>>)
                       -> Rc<Expr> {
-        Rc::new(Expr::Lambda(args, variadic, body, env))
+        Rc::new(Expr::Lambda {
+            params: params,
+            variadic: variadic,
+            body: body,
+            env: env,
+        })
     }
 
     pub fn new_define(symbol: String, expr: Rc<Expr>) -> Rc<Expr> {
@@ -108,7 +126,7 @@ impl Expr {
             Expr::Pair(..) => Type::Pair,
             Expr::Number(_) => Type::Number,
             Expr::Boolean(_) => Type::Boolean,
-            Expr::Lambda(..) => Type::Lambda,
+            Expr::Lambda{..} => Type::Lambda,
             Expr::Nil => Type::Nil,
             _ => Type::Expr,
         }
@@ -141,7 +159,7 @@ impl fmt::Display for Expr {
                 }
             }
             Expr::Placeholder => write!(f, "_"),
-            Expr::If(ref pred, ref cons, ref alt) => write!(f, "(if {} {} {})", *pred, *cons, *alt),
+            Expr::If{ref pred, ref cons, ref alt} => write!(f, "(if {} {} {})", *pred, *cons, *alt),
             Expr::Cond(ref cases) => {
                 try!(write!(f, "(cond"));
                 for case in cases {
@@ -152,7 +170,7 @@ impl fmt::Display for Expr {
             }
             Expr::Number(val) => write!(f, "{}", val),
             Expr::Boolean(val) => write!(f, "#{}", val),
-            Expr::Lambda(ref params, variadic, ref body, _) => {
+            Expr::Lambda{ref params, variadic, ref body, env: _} => {
                 try!(write!(f, "(lambda ("));
                 if !params.is_empty() {
                     try!(write!(f, "{}", params[0]));
@@ -363,7 +381,7 @@ fn eval_partially(expr: &Rc<Expr>, env: &Rc<RefCell<Environment>>) -> PartialEva
             match env.borrow().get(symbol) {
                 Some(expr) => {
                     match *expr {
-                        Expr::Lambda(..) => eval_partially(&expr, env),
+                        Expr::Lambda{..} => eval_partially(&expr, env),
                         _ => PartialEvalRes::Done(expr.clone()),
                     }
                 }
@@ -372,13 +390,13 @@ fn eval_partially(expr: &Rc<Expr>, env: &Rc<RefCell<Environment>>) -> PartialEva
         }
         Expr::Quote(ref e) => PartialEvalRes::Done(e.clone()),
         Expr::Pair(ref head, ref tail) => eval_pair(head, tail, env),
-        Expr::If(ref pred, ref cons, ref alt) => eval_if(pred, cons, alt, env),
+        Expr::If{ref pred, ref cons, ref alt} => eval_if(pred, cons, alt, env),
         Expr::Cond(ref cases) => eval_cond(cases, env),
         Expr::Define(ref symb, ref expr) => {
             PartialEvalRes::from_eval_res(eval_define(symb, expr, env))
         }
         Expr::Let(ref defs, ref body) => eval_let(defs, body, env.clone()),
-        Expr::Lambda(ref params, variadic, ref body, ref lambda_env) => {
+        Expr::Lambda{ref params, variadic, ref body, env: ref lambda_env} => {
             // If the lambda is not bound to an environment yet, bind it to the current environment.
             // This way variables from this environment are captured.
             let res = match *lambda_env {
@@ -432,7 +450,7 @@ fn eval_pair(head: &Rc<Expr>, tail: &Expr, env: &Rc<RefCell<Environment>>) -> Pa
     }
 
     match *first {
-        Expr::Lambda(ref params, variadic, _, _) => {
+        Expr::Lambda{ref params, variadic, body:_, env:_} => {
             // check the number of arguments given
             if !variadic && evaled_args.len() > params.len() {
                 // too many arguments
@@ -474,7 +492,7 @@ fn eval_pair(head: &Rc<Expr>, tail: &Expr, env: &Rc<RefCell<Environment>>) -> Pa
 /// If procedure isn't a lambda.  This should be made impossible by the logic in eval_pair.
 fn apply_to_procedure(procedure: &Rc<Expr>, args: Vec<Rc<Expr>>) -> PartialEvalRes {
     let (params, variadic, body, lambda_env) = match **procedure {
-        Expr::Lambda(ref params, variadic, ref body, ref env) => (params, variadic, body, env),
+        Expr::Lambda{ref params, variadic, ref body, ref env} => (params, variadic, body, env),
         _ => unreachable!(),
     };
 
