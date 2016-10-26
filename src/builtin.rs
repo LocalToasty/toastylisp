@@ -178,7 +178,7 @@ impl BuiltinProc {
             BuiltinProc::IsValidChar => BuiltinProc::eval_is_char(&args[0]),
             BuiltinProc::IsLambda => {
                 match *args[0] {
-                    Expr::Lambda{..} => Ok(Expr::new_boolean(true)),
+                    Expr::Lambda(_) => Ok(Expr::new_boolean(true)),
                     _ => Ok(Expr::new_boolean(false)),
                 }
             }

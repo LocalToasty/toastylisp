@@ -10,8 +10,8 @@ use std::fs::File;
 use std::env;
 
 mod expression;
-mod builtin;
 mod environment;
+mod builtin;
 mod parser;
 
 fn main() {
